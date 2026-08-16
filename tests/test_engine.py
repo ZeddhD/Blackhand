@@ -256,6 +256,43 @@ def test_dead_player_sees_round_log_but_alive_player_does_not():
     assert "round_log" not in alive_view
 
 
+def test_return_to_lobby_resets_game_for_a_rematch():
+    game = make_game(names=["A", "B", "C"], role_counts={Role.MAFIA: 1})
+    game.start_game()
+    mafia = by_role(game, Role.MAFIA)[0]
+    mafia.alive = False
+    game.resolve_night()
+    assert game.phase == Phase.GAME_OVER
+
+    game.return_to_lobby()
+    assert game.phase == Phase.LOBBY
+    assert game.winner is None
+    assert game.round_log == []
+    assert all(p.role is None and p.alive for p in game.players)
+    # can configure and start a fresh game afterwards
+    game.config = GameConfig(role_counts={Role.MAFIA: 1})
+    game.start_game()
+    assert game.phase == Phase.NIGHT
+
+
+def test_return_to_lobby_rejected_mid_game():
+    game = make_game(role_counts={Role.MAFIA: 1})
+    game.start_game()
+    with pytest.raises(Exception):
+        game.return_to_lobby()
+
+
+def test_remove_player_allowed_after_game_over():
+    game = make_game(names=["A", "B", "C"], role_counts={Role.MAFIA: 1})
+    game.start_game()
+    mafia = by_role(game, Role.MAFIA)[0]
+    mafia.alive = False
+    game.resolve_night()
+    assert game.phase == Phase.GAME_OVER
+    game.remove_player(game.players[0].id)
+    assert len(game.players) == 2
+
+
 def test_game_over_reveals_mafia_to_everyone():
     game = make_game(names=["A", "B", "C"], role_counts={Role.MAFIA: 1})
     game.start_game()

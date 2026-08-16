@@ -71,9 +71,30 @@ class Game:
         return player
 
     def remove_player(self, player_id: str) -> None:
-        if self.phase != Phase.LOBBY:
-            raise IllegalActionError("Cannot leave after the game has started")
+        if self.phase not in (Phase.LOBBY, Phase.GAME_OVER):
+            raise IllegalActionError("Cannot leave while a game is in progress")
         self.players = [p for p in self.players if p.id != player_id]
+
+    def return_to_lobby(self) -> None:
+        """Reset a finished game back to the lobby so the same room can play
+        again, keeping the same players and room code."""
+        if self.phase != Phase.GAME_OVER:
+            raise IllegalActionError("Can only return to the lobby after a game has ended")
+        self.phase = Phase.LOBBY
+        self.night_number = 0
+        self.winner = None
+        self.pending_actions.clear()
+        self.votes.clear()
+        self.events.clear()
+        self.private_log.clear()
+        self.round_log.clear()
+        self.mafia_kill_target = None
+        self.mafia_kill_actor = None
+        self._doctor_self_heal_used = False
+        self._doctor_last_target = None
+        for p in self.players:
+            p.role = None
+            p.alive = True
 
     def player(self, player_id: str) -> Player:
         for p in self.players:

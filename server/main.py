@@ -154,6 +154,17 @@ async def ws_endpoint(websocket: WebSocket):
                 await websocket.send_json({"type": "left"})
                 await broadcast_state(left_room)
 
+            elif mtype == "return_to_lobby":
+                if room is None or player_id is None:
+                    continue
+                try:
+                    room.game.return_to_lobby()
+                except IllegalActionError as e:
+                    await _send_error(websocket, str(e))
+                    continue
+                room.mafia_chat.clear()
+                await broadcast_state(room)
+
             elif mtype == "vote":
                 if room is None or player_id is None:
                     continue
