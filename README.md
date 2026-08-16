@@ -53,11 +53,30 @@ The spec explicitly leaves these for the implementer to decide and document:
   never a tie to break, since there is only ever one target. Tied lynch
   votes still result in no lynch.
 
-Two bugs worth calling out from building this: an early draft let the
-Godfather see the Mafia's private chat before promotion, and let the "allies"
-view for a Mafia player leak the Godfather's identity -- both violate the
-spec's core secrecy requirement (mafia don't know the Godfather; the
-Godfather has no chat access until promoted) and were fixed before shipping.
+## Bugs found and fixed during development (historical, not current)
+
+These were caught and corrected before anything shipped. Listed here only
+so the reasoning behind the current Godfather visibility rules is on
+record, not because they are still present.
+
+- An early draft let the Godfather see the Mafia's private chat before
+  promotion. Fixed: the chat channel now only opens for players whose role
+  is exactly `Mafia`, never `Godfather` (`server/rooms.py`,
+  `mafia_channel_ids`).
+- An early draft built the Mafia's "allies" list from "everyone on the evil
+  team," which technically includes the Godfather, so his name leaked into
+  the regular Mafia's own screen. Fixed: `allies` (shown to Mafia) and
+  `known_mafia` (shown to the Godfather) are now two separate, one-way
+  lists in `engine/game.py::view_for` -- Mafia players see only other
+  Mafia; the Godfather separately sees all the Mafia; neither list ever
+  crosses over.
+
+Current, correct behavior (covered by `tests/test_engine.py`): the Mafia
+never learn who the Godfather is, and the Godfather never sees Mafia chat
+or their kill target -- only the list of who they are. If every regular
+Mafia player dies, `_check_succession` flips the Godfather's role to
+`Mafia` outright, and the game continues with him now getting full Mafia
+access.
 
 ## Dead players and the game log
 
@@ -144,3 +163,16 @@ one of those.
 - No way to stop players from side-channel texting/talking outside the app.
 - No Discord API integration -- Discord is voice-only infrastructure.
 - No speaking-order enforcement during Day.
+
+## Testing gap: no manual browser testing yet
+
+The engine (26 pytest tests) and the server protocol (verified live with
+scripted WebSocket clients: leave-lobby, custom timers, action-driven
+night ending, the shared Mafia kill syncing across members, dead players
+seeing the round log) are both tested end to end. The frontend has only
+been checked for a successful `npm run build` -- it has not been opened in
+a real browser. That matters most for anything purely visual or
+client-side: the circular timer ring, the sound cues, the grayscale dead
+screen, avatar rendering. A clean build proves the code compiles, not that
+it looks or sounds right. Play a real round in a browser and report
+anything that looks or sounds wrong.
