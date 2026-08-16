@@ -266,7 +266,7 @@ function Lobby({ state, isHost, onStart, onLeave, roomCode }) {
       <div className="card-tab tab-brass">Lobby</div>
       <h2>Waiting Room</h2>
       <p className="muted">
-        Share the code above. Players join at /{roomCode} on their devices.
+        Share the code above. Players join at <span className="room-code">{roomCode}</span> on their devices.
       </p>
       <ul className="player-list">
         {state.players.map((p) => (
