@@ -21,10 +21,14 @@ export default function Timer({ seconds, total, phase }) {
   const offset = CIRCUMFERENCE * (1 - fraction);
   const color = colorFor(seconds, total);
 
+  const label = PHASE_LABEL[phase] || phase;
+
   return (
-    <div className="ring-timer">
-      <span className="ring-timer-label">{PHASE_LABEL[phase] || phase}</span>
-      <svg width="42" height="42" viewBox="0 0 42 42">
+    <div className="ring-timer" role="img" aria-label={`${label}, ${seconds} seconds remaining`}>
+      <span className="ring-timer-label" aria-hidden="true">
+        {label}
+      </span>
+      <svg width="42" height="42" viewBox="0 0 42 42" aria-hidden="true">
         <circle cx="21" cy="21" r={RADIUS} fill="none" stroke="var(--paper-edge)" strokeWidth="4" />
         <g transform="rotate(-90 21 21)">
           <circle

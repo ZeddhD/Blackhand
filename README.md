@@ -98,7 +98,7 @@ the Civilians win, the names of everyone who was secretly Mafia are shown.
 python -m venv venv
 ./venv/Scripts/activate        # Windows; use `source venv/bin/activate` on macOS/Linux
 pip install -r requirements-dev.txt
-pytest tests/ -q                # 32 headless engine tests
+pytest tests/ -q                # 36 headless engine tests
 uvicorn server.main:app --reload --port 8000
 ```
 
@@ -172,6 +172,32 @@ one of those.
   allowed both before a game starts and after one ends, just not mid-game.
 - Suggested room size: 8-12 players, ~1 mafia per 3-4 players (spec section 7).
 
+## Disconnects, reconnection, and cleanup
+
+- Every player's connection status is broadcast to everyone (`state.connected`),
+  shown as an "OFFLINE" tag on their row in every player list, so a dropped
+  connection is never mistaken for someone silently ignoring the game.
+- A dropped WebSocket gets a 30-second grace period to reconnect (same
+  `player_id` from localStorage, same as the existing reconnect flow) before
+  anything happens. If they reconnect in time, nothing changes.
+- If the grace period expires: before a game starts or after one ends,
+  they're dropped from the room outright, same as leaving voluntarily. If
+  it happens mid-game, they're marked eliminated instead of removed
+  (`Game.handle_disconnect_removal`) -- this keeps votes, night-action
+  requirements, and win checks consistent rather than leaving a hole in
+  the roster mid-round. There is no way to manually kick anyone; connection
+  loss is the only automatic removal path, by design (see project history).
+- A shared "someone died" tone plays for everyone in the room when a death
+  happens, distinct from the personal elimination sound the dead player
+  themselves hears.
+- Rooms with nobody connected and no activity for 2 hours are dropped from
+  memory by a background sweep (`reap_idle_rooms`), so a long-running
+  server doesn't accumulate every room ever created.
+- Player names are capped at 24 characters, enforced both client-side and
+  server-side (`sanitize_name`).
+- `GET /healthz` is a dedicated health-check endpoint (used by
+  `render.yaml`), separate from the Swagger docs page.
+
 ## Known limitations (spec section 10, by design)
 
 - No way to stop players from side-channel texting/talking outside the app.
@@ -180,13 +206,16 @@ one of those.
 
 ## Testing gap: no manual browser testing yet
 
-The engine (26 pytest tests) and the server protocol (verified live with
+The engine (36 pytest tests) and the server protocol (verified live with
 scripted WebSocket clients: leave-lobby, custom timers, action-driven
-night ending, the shared Mafia kill syncing across members, dead players
-seeing the round log) are both tested end to end. The frontend has only
-been checked for a successful `npm run build` -- it has not been opened in
-a real browser. That matters most for anything purely visual or
-client-side: the circular timer ring, the sound cues, the grayscale dead
-screen, avatar rendering. A clean build proves the code compiles, not that
-it looks or sounds right. Play a real round in a browser and report
-anything that looks or sounds wrong.
+night/voting endings, the shared Mafia kill syncing across members, dead
+players seeing the round log, reconnect-within-grace, disconnect
+auto-removal, mid-game disconnect marking eliminated, idle room reaping)
+are all tested end to end. The frontend has only been checked for a
+successful `npm run build` -- it has not been opened in a real browser.
+That matters most for anything purely visual or client-side: the circular
+timer ring, the sound cues (including the new shared death toll), the
+grayscale dead screen, avatar rendering, the offline tags, and the
+confirmation dialogs on Return to Lobby / Leave Game. A clean build proves
+the code compiles, not that it looks or sounds right. Play a real round in
+a browser and report anything that looks or sounds wrong.

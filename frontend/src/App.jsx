@@ -8,6 +8,7 @@ import { ROLE_INFO, roleLabel } from "./roles";
 import {
   isSoundEnabled,
   playDayChime,
+  playDeathToll,
   playEliminated,
   playGameOverChime,
   playNightChime,
@@ -30,6 +31,13 @@ const PHASE_CHIME = {
   day_discussion: playDayChime,
   voting: playVoteChime,
   game_over: playGameOverChime,
+};
+
+const PHASE_ANNOUNCEMENT = {
+  night: "Night has fallen. Stay silent.",
+  day_discussion: "Day discussion has begun.",
+  voting: "Voting is open.",
+  game_over: "The game has ended.",
 };
 
 export default function App() {
@@ -55,10 +63,13 @@ export default function App() {
   const [joinCode, setJoinCode] = useState(codeFromUrl());
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [soundOn, setSoundOn] = useState(true);
+  const [announcement, setAnnouncement] = useState("");
 
   const prevPhase = useRef(null);
   const prevDead = useRef(false);
   const lastTick = useRef(null);
+  const prevAlive = useRef({});
+  const mainRef = useRef(null);
 
   useEffect(() => {
     setSelectedTarget(null);
@@ -80,6 +91,10 @@ export default function App() {
       prevPhase.current = state.phase;
       const chime = PHASE_CHIME[state.phase];
       if (chime) chime();
+      setAnnouncement(PHASE_ANNOUNCEMENT[state.phase] || `Phase changed: ${state.phase}`);
+      // Move focus to the new phase's content so screen reader users land
+      // somewhere meaningful instead of staying wherever focus was before.
+      mainRef.current?.focus();
     }
   }, [state?.phase]);
 
@@ -87,6 +102,18 @@ export default function App() {
     if (isDead && !prevDead.current) playEliminated();
     prevDead.current = isDead;
   }, [isDead]);
+
+  useEffect(() => {
+    if (!state) return;
+    const prev = prevAlive.current;
+    const newlyDead = state.players.filter((p) => prev[p.id] === true && !p.alive && p.id !== playerId);
+    if (newlyDead.length > 0) playDeathToll();
+    const next = {};
+    state.players.forEach((p) => {
+      next[p.id] = p.alive;
+    });
+    prevAlive.current = next;
+  }, [state?.players, playerId]);
 
   useEffect(() => {
     if (!timer || timer.secondsLeft == null) return;
@@ -111,7 +138,12 @@ export default function App() {
         <p className="muted">{connected ? "Ready." : "Connecting..."}</p>
         <div className="card">
           <div className="card-tab tab-brass">Join</div>
-          <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input
+            placeholder="Your name"
+            maxLength={24}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
           <button
             className="primary"
             disabled={!connected || !name.trim()}
@@ -165,8 +197,13 @@ export default function App() {
         </div>
       </header>
 
+      <div className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </div>
+
       {error && <p className="error">{error}</p>}
 
+      <div ref={mainRef} tabIndex={-1}>
       {state.phase === "lobby" && (
         <Lobby state={state} isHost={isHost} onStart={startGame} onLeave={leaveRoom} roomCode={roomCode} />
       )}
@@ -204,10 +241,17 @@ export default function App() {
       )}
 
       {!isDead && state.phase === "day_discussion" && (
-        <div className="card center">
+        <div className="card">
           <div className="card-tab tab-brass">Day</div>
           <h2>Day Discussion</h2>
           <p className="muted">Talk it out over voice. Voting starts when the timer ends.</p>
+          <ul className="player-list">
+            {state.players.map((p) => (
+              <li key={p.id}>
+                <PlayerRow name={p.name} dead={!p.alive} offline={state.connected?.[p.id] === false} />
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -231,6 +275,7 @@ export default function App() {
                   danger
                   selected={state.votes[playerId] === p.id}
                   tag={state.votes[playerId] === p.id ? "YOUR VOTE" : null}
+                  offline={state.connected?.[p.id] === false}
                   onClick={() => vote(p.id)}
                 />
               </li>
@@ -248,6 +293,7 @@ export default function App() {
       {state.phase === "game_over" && (
         <GameOverPanel state={state} onReturnToLobby={returnToLobby} onLeave={leaveRoom} />
       )}
+      </div>
 
       <EventLog events={state.events} privateLog={state.private_log} />
     </div>
@@ -284,7 +330,7 @@ function Lobby({ state, isHost, onStart, onLeave, roomCode }) {
       <ul className="player-list">
         {state.players.map((p) => (
           <li key={p.id}>
-            <PlayerRow name={p.name} />
+            <PlayerRow name={p.name} offline={state.connected?.[p.id] === false} />
           </li>
         ))}
       </ul>
@@ -380,6 +426,7 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
               name={p.name}
               danger={actionType === "kill"}
               selected={selectedId === p.id}
+              offline={state.connected?.[p.id] === false}
               onClick={() => {
                 setSelectedTarget(p.id);
                 nightAction(actionType, p.id);
@@ -442,10 +489,24 @@ function GameOverPanel({ state, onReturnToLobby, onLeave }) {
       )}
       <RoundLog log={state.round_log} />
       <div className="game-over-actions">
-        <button className="primary" onClick={onReturnToLobby}>
+        <button
+          className="primary"
+          onClick={() => {
+            if (window.confirm("Return everyone in this room to the lobby for a rematch?")) {
+              onReturnToLobby();
+            }
+          }}
+        >
           Return to Lobby
         </button>
-        <button className="ghost" onClick={onLeave}>
+        <button
+          className="ghost"
+          onClick={() => {
+            if (window.confirm("Leave this game and return to the title screen?")) {
+              onLeave();
+            }
+          }}
+        >
           Leave Game
         </button>
       </div>
