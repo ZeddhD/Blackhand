@@ -19,12 +19,27 @@ from .rooms import (
     RoomManager,
     broadcast_mafia_chat,
     broadcast_state,
+    cancel_disconnect_removal,
+    reap_idle_rooms,
     run_room,
+    sanitize_name,
+    schedule_disconnect_removal,
+    touch,
 )
 
 app = FastAPI()
 manager = RoomManager()
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+
+
+@app.on_event("startup")
+async def _start_room_reaper() -> None:
+    asyncio.create_task(reap_idle_rooms(manager))
+
+
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok"}
 
 
 async def _send_error(ws: WebSocket, message: str) -> None:
@@ -37,12 +52,14 @@ async def _send_error(ws: WebSocket, message: str) -> None:
 async def _attach(room: Room, player_id: str, ws: WebSocket) -> None:
     room.connections[player_id] = ws
     room.connected[player_id] = True
+    cancel_disconnect_removal(room, player_id)
 
 
 def _detach(room: Room, player_id: str) -> None:
     if room.connections.get(player_id) is not None:
         room.connections.pop(player_id, None)
     room.connected[player_id] = False
+    schedule_disconnect_removal(room, player_id)
 
 
 @app.websocket("/ws")
@@ -55,11 +72,13 @@ async def ws_endpoint(websocket: WebSocket):
         while True:
             msg = await websocket.receive_json()
             mtype = msg.get("type")
+            if room is not None:
+                touch(room)
 
             if mtype == "create_room":
                 room = manager.create_room()
                 player_id = str(uuid.uuid4())
-                player = room.game.add_player(player_id, msg.get("name", "Host"))
+                room.game.add_player(player_id, sanitize_name(msg.get("name"), "Host"))
                 room.host_id = player_id
                 await _attach(room, player_id, websocket)
                 await websocket.send_json(
@@ -89,7 +108,7 @@ async def ws_endpoint(websocket: WebSocket):
                     continue
                 room = target
                 player_id = str(uuid.uuid4())
-                room.game.add_player(player_id, msg.get("name", "Player"))
+                room.game.add_player(player_id, sanitize_name(msg.get("name"), "Player"))
                 await _attach(room, player_id, websocket)
                 await websocket.send_json(
                     {"type": "joined", "room_code": room.code, "player_id": player_id}
@@ -146,8 +165,13 @@ async def ws_endpoint(websocket: WebSocket):
                 except IllegalActionError as e:
                     await _send_error(websocket, str(e))
                     continue
-                _detach(room, player_id)
+                # A voluntary leave, not a dropped connection -- clean up
+                # directly rather than going through _detach, which would
+                # schedule a pointless reconnect-grace removal for someone
+                # who is already gone from the game.
+                room.connections.pop(player_id, None)
                 room.connected.pop(player_id, None)
+                cancel_disconnect_removal(room, player_id)
                 room.reassign_host_if_needed()
                 left_room, left_player = room, player_id
                 room, player_id = None, None

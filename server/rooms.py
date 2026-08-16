@@ -18,7 +18,24 @@ DEFAULT_VOTING_SECONDS = 60
 MIN_PHASE_SECONDS = 15
 MAX_PHASE_SECONDS = 600
 
+# A dropped connection isn't necessarily gone for good -- phones lock,
+# wifi blips. Give it a grace period to reconnect before treating it as a
+# real departure.
+DISCONNECT_GRACE_SECONDS = 30
+
+# Rooms nobody is connected to and nothing has happened in for this long
+# are swept up so the server doesn't hold every room ever created forever.
+ROOM_IDLE_LIMIT_SECONDS = 2 * 60 * 60
+REAP_INTERVAL_SECONDS = 5 * 60
+
+MAX_NAME_LENGTH = 24
+
 ROLE_BY_NAME = {r.value: r for r in Role}
+
+
+def sanitize_name(raw: Optional[str], fallback: str) -> str:
+    name = (raw or "").strip()[:MAX_NAME_LENGTH]
+    return name or fallback
 
 
 @dataclass
@@ -40,6 +57,8 @@ class Room:
     early_end_event: asyncio.Event = field(default_factory=asyncio.Event)
     night_ready_event: asyncio.Event = field(default_factory=asyncio.Event)
     runner_task: Optional[asyncio.Task] = None
+    disconnect_tasks: Dict[str, asyncio.Task] = field(default_factory=dict)
+    last_activity: float = field(default_factory=time.time)
     seconds_left: int = 0
     discussion_seconds: int = DEFAULT_DISCUSSION_SECONDS
     voting_seconds: int = DEFAULT_VOTING_SECONDS
@@ -76,6 +95,7 @@ class RoomManager:
 
 
 async def broadcast_state(room: Room) -> None:
+    connected_map = {p.id: room.connected.get(p.id, False) for p in room.game.players}
     for player in room.game.players:
         ws = room.connections.get(player.id)
         if ws is None:
@@ -83,6 +103,7 @@ async def broadcast_state(room: Room) -> None:
         try:
             view = room.game.view_for(player.id)
             view["is_host"] = player.id == room.host_id
+            view["connected"] = connected_map
             await ws.send_json({"type": "state", "state": view})
         except Exception:
             pass
@@ -180,3 +201,71 @@ async def run_room(room: Room) -> None:
         import traceback
 
         traceback.print_exc()
+
+
+async def _disconnect_after_grace(room: Room, player_id: str) -> None:
+    try:
+        await asyncio.sleep(DISCONNECT_GRACE_SECONDS)
+    except asyncio.CancelledError:
+        return  # reconnected (or the removal was otherwise cancelled)
+    if room.connected.get(player_id):
+        return  # reconnected in the window between sleep and this check
+
+    room.game.handle_disconnect_removal(player_id)
+    room.connected.pop(player_id, None)
+    room.connections.pop(player_id, None)
+    room.disconnect_tasks.pop(player_id, None)
+    room.reassign_host_if_needed()
+    await broadcast_state(room)
+
+    # If this removal just satisfied night/voting completion, or ended the
+    # game outright, wake whatever run_room is currently waiting on so it
+    # notices right away instead of sitting until the timer expires.
+    game = room.game
+    if game.phase == Phase.GAME_OVER:
+        room.night_ready_event.set()
+        room.early_end_event.set()
+    elif game.phase == Phase.NIGHT and game.night_actions_ready():
+        room.night_ready_event.set()
+    elif game.phase == Phase.VOTING and game.votes_complete():
+        room.early_end_event.set()
+
+
+def schedule_disconnect_removal(room: Room, player_id: str) -> None:
+    existing = room.disconnect_tasks.get(player_id)
+    if existing and not existing.done():
+        existing.cancel()
+    room.disconnect_tasks[player_id] = asyncio.create_task(_disconnect_after_grace(room, player_id))
+
+
+def cancel_disconnect_removal(room: Room, player_id: str) -> None:
+    task = room.disconnect_tasks.pop(player_id, None)
+    if task and not task.done():
+        task.cancel()
+
+
+def touch(room: Room) -> None:
+    room.last_activity = time.time()
+
+
+async def reap_idle_rooms(manager: RoomManager) -> None:
+    """Background sweep: drop rooms nobody is connected to and nothing has
+    happened in for a long time, so long server uptime doesn't accumulate
+    every room ever created in memory forever."""
+    while True:
+        await asyncio.sleep(REAP_INTERVAL_SECONDS)
+        now = time.time()
+        stale_codes = [
+            code
+            for code, room in manager.rooms.items()
+            if not any(room.connected.values()) and now - room.last_activity > ROOM_IDLE_LIMIT_SECONDS
+        ]
+        for code in stale_codes:
+            room = manager.rooms.pop(code, None)
+            if room is None:
+                continue
+            if room.runner_task and not room.runner_task.done():
+                room.runner_task.cancel()
+            for task in room.disconnect_tasks.values():
+                if not task.done():
+                    task.cancel()

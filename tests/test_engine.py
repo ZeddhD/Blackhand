@@ -299,6 +299,43 @@ def test_votes_complete_ignores_dead_players():
     assert game.votes_complete()
 
 
+def test_handle_disconnect_removal_in_lobby_drops_player_outright():
+    game = make_game(names=["A", "B", "C", "D"])
+    game.handle_disconnect_removal(game.players[0].id)
+    assert len(game.players) == 3
+
+
+def test_handle_disconnect_removal_mid_game_marks_eliminated_not_removed():
+    game = make_game(names=["A", "B", "C", "D", "E"], role_counts={Role.MAFIA: 1})
+    game.start_game()
+    victim = next(p for p in game.players if p.role is not Role.MAFIA)
+    game.handle_disconnect_removal(victim.id)
+    assert victim in game.players  # still in the roster
+    assert not victim.alive
+    assert game.phase != Phase.GAME_OVER  # 1 mafia vs 3 town remaining, not parity yet
+
+
+def test_handle_disconnect_removal_clears_their_pending_vote():
+    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.MAFIA: 1})
+    game.start_game()
+    game.resolve_night()
+    game.begin_voting()
+    a, b, c, d = game.players
+    game.submit_vote(a.id, b.id)
+    game.handle_disconnect_removal(a.id)
+    assert a.id not in game.votes
+    assert not a.alive
+
+
+def test_handle_disconnect_removal_can_end_the_game():
+    game = make_game(names=["A", "B", "C"], role_counts={Role.MAFIA: 1})
+    game.start_game()
+    mafia = by_role(game, Role.MAFIA)[0]
+    game.handle_disconnect_removal(mafia.id)
+    assert game.phase == Phase.GAME_OVER
+    assert game.winner == Team.TOWN
+
+
 def test_return_to_lobby_resets_game_for_a_rematch():
     game = make_game(names=["A", "B", "C"], role_counts={Role.MAFIA: 1})
     game.start_game()

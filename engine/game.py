@@ -80,6 +80,30 @@ class Game:
             raise IllegalActionError("Cannot leave while a game is in progress")
         self.players = [p for p in self.players if p.id != player_id]
 
+    def handle_disconnect_removal(self, player_id: str) -> None:
+        """Called once a disconnected player's reconnect grace period has
+        expired. Before the game starts or after it ends they're dropped
+        outright (remove_player). Mid-game they can't be voluntarily
+        removed, but a dead-and-gone connection can't be left blocking the
+        game forever either -- so they're marked eliminated instead, which
+        keeps votes, night-action requirements, and win checks consistent
+        rather than leaving a hole in the player list mid-round."""
+        if self.phase in (Phase.LOBBY, Phase.GAME_OVER):
+            self.remove_player(player_id)
+            return
+        try:
+            player = self.player(player_id)
+        except KeyError:
+            return
+        if not player.alive:
+            return
+        player.alive = False
+        self.votes.pop(player_id, None)
+        self.pending_actions.pop(player_id, None)
+        self.events.append(f"{player.name} disconnected and was removed from the game.")
+        self._check_succession()
+        self._check_win()
+
     def return_to_lobby(self) -> None:
         """Reset a finished game back to the lobby so the same room can play
         again, keeping the same players and room code."""

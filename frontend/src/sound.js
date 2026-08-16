@@ -69,10 +69,18 @@ export function playTick() {
   tone(880, 0, 0.08, { type: "square", gain: 0.08 });
 }
 
-// Low descending tone: you have been eliminated.
+// Low descending tone: you have been eliminated. Personal -- only the
+// player who died hears this one.
 export function playEliminated() {
   tone(220, 0, 0.35, { type: "sawtooth", gain: 0.12 });
   tone(146, 0.25, 0.7, { type: "sawtooth", gain: 0.12 });
+}
+
+// Single soft low toll: someone else in the room has died. Deliberately
+// shorter and quieter than playEliminated so the two are never confused --
+// this is an ambient notice, not a personal event.
+export function playDeathToll() {
+  tone(165, 0, 0.5, { type: "sine", gain: 0.1 });
 }
 
 export function unlockAudio() {

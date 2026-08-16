@@ -4,7 +4,7 @@ services:
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /docs
+    healthCheckPath: /healthz
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
