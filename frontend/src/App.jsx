@@ -165,7 +165,7 @@ export default function App() {
       {error && <p className="error">{error}</p>}
 
       {state.phase === "lobby" && (
-        <Lobby state={state} isHost={isHost} onStart={startGame} onLeave={leaveRoom} />
+        <Lobby state={state} isHost={isHost} onStart={startGame} onLeave={leaveRoom} roomCode={roomCode} />
       )}
 
       {state.phase !== "lobby" && state.phase !== "game_over" && (
@@ -256,7 +256,7 @@ function RoleExplainer() {
   );
 }
 
-function Lobby({ state, isHost, onStart, onLeave }) {
+function Lobby({ state, isHost, onStart, onLeave, roomCode }) {
   const [roleCounts, setRoleCounts] = useState({ mafia: 1, detective: 1, doctor: 1, godfather: 0 });
   const [discussion, setDiscussion] = useState(60);
   const [voting, setVoting] = useState(60);
@@ -265,7 +265,9 @@ function Lobby({ state, isHost, onStart, onLeave }) {
     <div className="card">
       <div className="card-tab tab-brass">Lobby</div>
       <h2>Waiting Room</h2>
-      <p className="muted">Share the code above. Players join at /{"<CODE>"} on their phones.</p>
+      <p className="muted">
+        Share the code above. Players join at /{roomCode} on their devices.
+      </p>
       <ul className="player-list">
         {state.players.map((p) => (
           <li key={p.id}>
