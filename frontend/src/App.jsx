@@ -42,6 +42,7 @@ export default function App() {
     joinRoom,
     startGame,
     leaveRoom,
+    returnToLobby,
     nightAction,
     vote,
     sendMafiaChat,
@@ -228,7 +229,9 @@ export default function App() {
         </div>
       )}
 
-      {state.phase === "game_over" && <GameOverPanel state={state} />}
+      {state.phase === "game_over" && (
+        <GameOverPanel state={state} onReturnToLobby={returnToLobby} onLeave={leaveRoom} />
+      )}
 
       <EventLog events={state.events} privateLog={state.private_log} />
 
@@ -410,7 +413,7 @@ function RoundLog({ log }) {
   );
 }
 
-function GameOverPanel({ state }) {
+function GameOverPanel({ state, onReturnToLobby, onLeave }) {
   const mafiaWon = state.winner === "mafia";
   return (
     <div className="card center">
@@ -428,6 +431,14 @@ function GameOverPanel({ state }) {
         </>
       )}
       <RoundLog log={state.round_log} />
+      <div className="game-over-actions">
+        <button className="primary" onClick={onReturnToLobby}>
+          Return to Lobby
+        </button>
+        <button className="ghost" onClick={onLeave}>
+          Leave Game
+        </button>
+      </div>
     </div>
   );
 }

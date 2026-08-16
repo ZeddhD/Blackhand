@@ -534,6 +534,12 @@ button.ghost {
   line-height: 1.5;
 }
 
+.game-over-actions {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--paper-edge);
+}
+
 /* Circular countdown ring. Color itself carries the urgency signal:
    steel with plenty of time, brass in the last third, blood in the
    final ten seconds -- synced to the tick sound at the same threshold. */

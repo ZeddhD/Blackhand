@@ -98,7 +98,7 @@ the Civilians win, the names of everyone who was secretly Mafia are shown.
 python -m venv venv
 ./venv/Scripts/activate        # Windows; use `source venv/bin/activate` on macOS/Linux
 pip install -r requirements-dev.txt
-pytest tests/ -q                # 26 headless engine tests
+pytest tests/ -q                # 29 headless engine tests
 uvicorn server.main:app --reload --port 8000
 ```
 
@@ -156,6 +156,10 @@ one of those.
   with "Skip timer (host)".
 - Players can leave the lobby before the game starts ("Leave Lobby"); if the
   host leaves, the next remaining player becomes host.
+- After a game ends, anyone in the room can hit "Return to Lobby" to reset
+  the same room (same code, same players) back to a fresh lobby for a
+  rematch, or "Leave Game" to exit to the title screen. Leaving is now
+  allowed both before a game starts and after one ends, just not mid-game.
 - Suggested room size: 8-12 players, ~1 mafia per 3-4 players (spec section 7).
 
 ## Known limitations (spec section 10, by design)
