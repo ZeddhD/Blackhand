@@ -88,9 +88,14 @@ async def broadcast_state(room: Room) -> None:
             pass
 
 
-async def broadcast_timer(room: Room, seconds_left: int) -> None:
+async def broadcast_timer(room: Room, seconds_left: int, total_seconds: int) -> None:
     room.seconds_left = seconds_left
-    payload = {"type": "timer", "phase": room.game.phase.value, "seconds_left": seconds_left}
+    payload = {
+        "type": "timer",
+        "phase": room.game.phase.value,
+        "seconds_left": seconds_left,
+        "total_seconds": total_seconds,
+    }
     for ws in list(room.connections.values()):
         try:
             await ws.send_json(payload)
@@ -119,7 +124,7 @@ async def broadcast_mafia_chat(room: Room) -> None:
 async def _countdown(room: Room, seconds: int) -> None:
     room.skip_event.clear()
     for remaining in range(seconds, 0, -1):
-        await broadcast_timer(room, remaining)
+        await broadcast_timer(room, remaining, seconds)
         try:
             await asyncio.wait_for(room.skip_event.wait(), timeout=1.0)
             break  # host force-advanced

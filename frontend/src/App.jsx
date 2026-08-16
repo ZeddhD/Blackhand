@@ -1,14 +1,33 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGameSocket } from "./useGameSocket";
 import MafiaChat from "./components/MafiaChat";
 import RoleConfig from "./components/RoleConfig";
 import Timer from "./components/Timer";
+import PlayerRow from "./components/PlayerRow";
 import { ROLE_INFO, roleLabel } from "./roles";
+import {
+  isSoundEnabled,
+  playDayChime,
+  playEliminated,
+  playGameOverChime,
+  playNightChime,
+  playTick,
+  playVoteChime,
+  setSoundEnabled,
+  unlockAudio,
+} from "./sound";
 
 function codeFromUrl() {
   const path = window.location.pathname.replace(/\//g, "");
   return path.length === 4 ? path.toUpperCase() : "";
 }
+
+const PHASE_CHIME = {
+  night: playNightChime,
+  day_discussion: playDayChime,
+  voting: playVoteChime,
+  game_over: playGameOverChime,
+};
 
 export default function App() {
   const {
@@ -32,6 +51,11 @@ export default function App() {
   const [name, setName] = useState("");
   const [joinCode, setJoinCode] = useState(codeFromUrl());
   const [selectedTarget, setSelectedTarget] = useState(null);
+  const [soundOn, setSoundOn] = useState(true);
+
+  const prevPhase = useRef(null);
+  const prevDead = useRef(false);
+  const lastTick = useRef(null);
 
   useEffect(() => {
     setSelectedTarget(null);
@@ -41,6 +65,41 @@ export default function App() {
     document.body.dataset.phase = state?.phase || "title";
   }, [state?.phase]);
 
+  const isDead = !!state && state.phase !== "lobby" && state.phase !== "game_over" && !state.your_alive;
+
+  useEffect(() => {
+    document.body.dataset.dead = isDead ? "true" : "false";
+  }, [isDead]);
+
+  useEffect(() => {
+    if (!state) return;
+    if (state.phase !== prevPhase.current) {
+      prevPhase.current = state.phase;
+      const chime = PHASE_CHIME[state.phase];
+      if (chime) chime();
+    }
+  }, [state?.phase]);
+
+  useEffect(() => {
+    if (isDead && !prevDead.current) playEliminated();
+    prevDead.current = isDead;
+  }, [isDead]);
+
+  useEffect(() => {
+    if (!timer || timer.secondsLeft == null) return;
+    if (timer.secondsLeft <= 10 && timer.secondsLeft !== lastTick.current) {
+      lastTick.current = timer.secondsLeft;
+      playTick();
+    }
+  }, [timer?.secondsLeft]);
+
+  const toggleSound = () => {
+    const next = !soundOn;
+    setSoundOn(next);
+    setSoundEnabled(next);
+    if (next) unlockAudio();
+  };
+
   if (!state) {
     return (
       <div className="screen center">
@@ -48,14 +107,15 @@ export default function App() {
         <p className="credit">made by ZeddhD</p>
         <p className="muted">{connected ? "Ready." : "Connecting..."}</p>
         <div className="card">
-          <input
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+          <div className="card-tab tab-brass">Join</div>
+          <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
           <button
+            className="primary"
             disabled={!connected || !name.trim()}
-            onClick={() => createRoom(name.trim())}
+            onClick={() => {
+              unlockAudio();
+              createRoom(name.trim());
+            }}
           >
             Host a new game
           </button>
@@ -67,8 +127,12 @@ export default function App() {
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
             />
             <button
+              className="primary"
               disabled={!connected || !name.trim() || joinCode.length !== 4}
-              onClick={() => joinRoom(joinCode, name.trim())}
+              onClick={() => {
+                unlockAudio();
+                joinRoom(joinCode, name.trim());
+              }}
             >
               Join
             </button>
@@ -80,18 +144,22 @@ export default function App() {
     );
   }
 
-  const isHost = state.is_host === true;
   const alivePlayers = state.players.filter((p) => p.alive);
   const others = state.players.filter((p) => p.id !== playerId);
-  const isDead = state.phase !== "lobby" && state.phase !== "game_over" && !state.your_alive;
+  const isHost = state.is_host === true;
 
   return (
     <div className="screen">
       <header className="topbar">
         <span className="room-code">Room {roomCode}</span>
-        {timer && timer.phase === state.phase && timer.secondsLeft != null && (
-          <Timer seconds={timer.secondsLeft} phase={timer.phase} />
-        )}
+        <div className="topbar-right">
+          {timer && timer.phase === state.phase && timer.secondsLeft != null && (
+            <Timer seconds={timer.secondsLeft} total={timer.totalSeconds} phase={timer.phase} />
+          )}
+          <button className="sound-toggle" onClick={toggleSound}>
+            {soundOn ? "Sound On" : "Sound Off"}
+          </button>
+        </div>
       </header>
 
       {error && <p className="error">{error}</p>}
@@ -102,6 +170,7 @@ export default function App() {
 
       {state.phase !== "lobby" && state.phase !== "game_over" && (
         <div className="card">
+          <div className="card-tab tab-brass">Your Role</div>
           <p className="role-badge">
             You are: <strong>{roleLabel(state.your_role)}</strong>
           </p>
@@ -133,6 +202,7 @@ export default function App() {
 
       {!isDead && state.phase === "day_discussion" && (
         <div className="card center">
+          <div className="card-tab tab-brass">Day</div>
           <h2>Day Discussion</h2>
           <p className="muted">Talk it out over voice. Voting starts when the timer ends.</p>
         </div>
@@ -140,16 +210,18 @@ export default function App() {
 
       {!isDead && state.phase === "voting" && (
         <div className="card">
+          <div className="card-tab tab-blood">Vote</div>
           <h2>Vote to Remove a Player</h2>
           <ul className="player-list">
             {alivePlayers.map((p) => (
               <li key={p.id}>
-                <button
-                  className={state.votes[playerId] === p.id ? "selected" : ""}
+                <PlayerRow
+                  name={p.name}
+                  danger
+                  selected={state.votes[playerId] === p.id}
+                  tag={state.votes[playerId] === p.id ? "YOUR VOTE" : null}
                   onClick={() => vote(p.id)}
-                >
-                  {p.name} {state.votes[playerId] === p.id ? "(your vote)" : ""}
-                </button>
+                />
               </li>
             ))}
           </ul>
@@ -172,7 +244,8 @@ export default function App() {
 function RoleExplainer() {
   return (
     <div className="card role-explainer">
-      <h2>How to Play</h2>
+      <div className="card-tab tab-steel">How to Play</div>
+      <h2>Roles</h2>
       {Object.values(ROLE_INFO).map((r) => (
         <div key={r.key} className="role-explainer-item">
           <p className="role-explainer-name">{r.label}</p>
@@ -190,12 +263,13 @@ function Lobby({ state, isHost, onStart, onLeave }) {
 
   return (
     <div className="card">
-      <h2>Lobby</h2>
+      <div className="card-tab tab-brass">Lobby</div>
+      <h2>Waiting Room</h2>
       <p className="muted">Share the code above. Players join at /{"<CODE>"} on their phones.</p>
       <ul className="player-list">
         {state.players.map((p) => (
-          <li key={p.id} className="lobby-player">
-            {p.name}
+          <li key={p.id}>
+            <PlayerRow name={p.name} />
           </li>
         ))}
       </ul>
@@ -221,6 +295,7 @@ function Lobby({ state, isHost, onStart, onLeave }) {
             <p className="muted">Night has no timer. It ends once every active role has acted.</p>
           </div>
           <button
+            className="primary"
             disabled={state.players.length < 4}
             onClick={() => onStart(roleCounts, { discussion, voting })}
           >
@@ -270,6 +345,7 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
 
   return (
     <div className="card">
+      <div className="card-tab tab-blood">Night</div>
       <div className="silent-banner compact">
         <p className="silent-banner-text">STAY SILENT</p>
       </div>
@@ -285,15 +361,15 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
       <ul className="player-list">
         {targets.map((p) => (
           <li key={p.id}>
-            <button
-              className={selectedId === p.id ? "selected" : ""}
+            <PlayerRow
+              name={p.name}
+              danger={actionType === "kill"}
+              selected={selectedId === p.id}
               onClick={() => {
                 setSelectedTarget(p.id);
                 nightAction(actionType, p.id);
               }}
-            >
-              {p.name}
-            </button>
+            />
           </li>
         ))}
       </ul>
@@ -303,9 +379,10 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
 
 function DeadPanel({ state }) {
   return (
-    <div className="dead-banner">
-      <p className="dead-banner-text">YOU ARE DEAD</p>
-      <p className="dead-banner-sub">You cannot talk or use voice chat for the rest of the game.</p>
+    <div className="card dead-panel">
+      <div className="card-tab tab-blood">Eliminated</div>
+      <span className="eliminated-stamp">ELIMINATED</span>
+      <p className="dead-panel-sub">You cannot talk or use voice chat for the rest of the game.</p>
       <p className="muted">You can now see everything that happens, round by round.</p>
       <RoundLog log={state.round_log} />
     </div>
@@ -316,7 +393,7 @@ function RoundLog({ log }) {
   if (!log?.length) return null;
   return (
     <div className="round-log">
-      <h3>Game Log</h3>
+      <h3>Case Log</h3>
       {log.map((round, i) => (
         <div key={i} className="round-log-entry">
           <p className="round-log-title">{round.title}</p>
@@ -335,6 +412,7 @@ function GameOverPanel({ state }) {
   const mafiaWon = state.winner === "mafia";
   return (
     <div className="card center">
+      <div className={`card-tab ${mafiaWon ? "tab-blood" : "tab-brass"}`}>Case Closed</div>
       <h1 className="title">{mafiaWon ? "Mafia Win" : "Civilians Win"}</h1>
       {mafiaWon ? (
         <>
@@ -356,6 +434,7 @@ function EventLog({ events, privateLog }) {
   if (!events?.length && !privateLog?.length) return null;
   return (
     <div className="card log">
+      <div className="card-tab tab-steel">Log</div>
       {privateLog?.map((msg, i) => (
         <p key={`p${i}`} className="private-log">
           {msg}
