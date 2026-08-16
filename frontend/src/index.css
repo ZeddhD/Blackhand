@@ -228,11 +228,6 @@ button.ghost {
   color: var(--gold);
 }
 
-.dead {
-  color: var(--blood-bright);
-  font-style: italic;
-}
-
 .error {
   color: var(--blood-bright);
   font-weight: 600;
@@ -299,4 +294,95 @@ button.ghost {
   color: var(--gold);
   text-align: center;
   margin: 6px 0 14px;
+}
+
+.credit {
+  color: var(--muted);
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  margin: -0.4em 0 0.8em;
+}
+
+.role-secret {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin: 0 0 10px;
+}
+
+.role-explainer {
+  text-align: left;
+  width: 100%;
+}
+
+.role-explainer-item {
+  margin-bottom: 14px;
+}
+
+.role-explainer-item:last-child {
+  margin-bottom: 0;
+}
+
+.role-explainer-name {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin: 0 0 2px;
+}
+
+.dead-banner {
+  width: 100%;
+  text-align: center;
+  padding: 28px 20px;
+  border: 2px solid var(--blood-bright);
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(122, 31, 43, 0.35), rgba(11, 10, 13, 0.7));
+  box-shadow: 0 0 50px rgba(165, 40, 52, 0.3) inset;
+}
+
+.dead-banner-text {
+  margin: 0 0 8px;
+  font-size: clamp(1.8rem, 5vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--blood-bright);
+  text-shadow: 0 0 24px rgba(165, 40, 52, 0.6);
+}
+
+.dead-banner-sub {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--gold);
+  margin: 0 0 10px;
+}
+
+.winner-names {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--gold);
+  margin: 0 0 16px;
+}
+
+.round-log {
+  width: 100%;
+  text-align: left;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.round-log-entry {
+  margin-bottom: 14px;
+}
+
+.round-log-title {
+  color: var(--gold);
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.round-log-line {
+  margin: 2px 0;
+  font-size: 1rem;
+  line-height: 1.5;
 }

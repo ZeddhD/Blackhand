@@ -240,6 +240,33 @@ def test_full_headless_12_player_game_runs_to_completion():
     assert game.winner in (Team.TOWN, Team.MAFIA)
 
 
+def test_dead_player_sees_round_log_but_alive_player_does_not():
+    game = make_game(role_counts={Role.MAFIA: 1})
+    game.start_game()
+    mafia = by_role(game, Role.MAFIA)[0]
+    victim = next(p for p in game.players if p.role is not Role.MAFIA)
+    game.submit_night_action(mafia.id, ActionType.KILL, victim.id)
+    game.resolve_night()
+
+    dead_view = game.view_for(victim.id)
+    assert "round_log" in dead_view
+
+    alive_id = next(p.id for p in game.alive_players() if p.id != mafia.id)
+    alive_view = game.view_for(alive_id)
+    assert "round_log" not in alive_view
+
+
+def test_game_over_reveals_mafia_to_everyone():
+    game = make_game(names=["A", "B", "C"], role_counts={Role.MAFIA: 1})
+    game.start_game()
+    mafia = by_role(game, Role.MAFIA)[0]
+    mafia.alive = False
+    game.resolve_night()
+    assert game.phase == Phase.GAME_OVER
+    view = game.view_for(game.players[0].id)
+    assert view["mafia_reveal"] == [mafia.name]
+
+
 def role_team_is_town(player):
     return player.role in (Role.VILLAGER, Role.DETECTIVE, Role.DOCTOR)
 
@@ -255,6 +282,42 @@ def test_remove_player_after_start_is_rejected():
     game.start_game()
     with pytest.raises(Exception):
         game.remove_player(game.players[0].id)
+
+
+def test_mafia_kill_is_a_single_shared_target():
+    game = make_game(names=[f"P{i}" for i in range(6)], role_counts={Role.MAFIA: 2})
+    game.start_game()
+    m1, m2 = by_role(game, Role.MAFIA)
+    victims = [p for p in game.players if p.role is not Role.MAFIA]
+
+    game.submit_night_action(m1.id, ActionType.KILL, victims[0].id)
+    assert game.mafia_kill_target == victims[0].id
+    assert game.night_actions_ready()  # one mafia member is enough
+
+    game.submit_night_action(m2.id, ActionType.KILL, victims[1].id)
+    assert game.mafia_kill_target == victims[1].id  # second member overwrites the shared choice
+
+    game.resolve_night()
+    assert not victims[1].alive
+    assert victims[0].alive
+
+
+def test_round_log_records_night_and_lynch_detail():
+    game = make_game(role_counts={Role.MAFIA: 1, Role.DOCTOR: 1})
+    game.start_game()
+    mafia = by_role(game, Role.MAFIA)[0]
+    victim = next(p for p in game.players if p.role is not Role.MAFIA)
+    game.submit_night_action(mafia.id, ActionType.KILL, victim.id)
+    game.resolve_night()
+    assert game.round_log[-1]["title"] == "Night 1"
+    assert any(victim.name in line for line in game.round_log[-1]["lines"])
+
+    game.begin_voting()
+    alive = game.alive_players()
+    for voter in alive[1:]:
+        game.submit_vote(voter.id, alive[0].id)
+    game.resolve_lynch()
+    assert game.round_log[-1]["title"].startswith("Day")
 
 
 def test_night_actions_ready_tracks_required_actors():

@@ -1,15 +1,17 @@
+import { roleLabel } from "../roles";
+
 const CONFIGURABLE_ROLES = ["mafia", "detective", "doctor", "godfather"];
 
 export default function RoleConfig({ roleCounts, setRoleCounts, playerCount }) {
   const assigned = Object.values(roleCounts).reduce((a, b) => a + b, 0);
-  const villagers = Math.max(0, playerCount - assigned);
+  const civilians = Math.max(0, playerCount - assigned);
 
   return (
     <div className="role-config">
       <h3>Roles</h3>
       {CONFIGURABLE_ROLES.map((role) => (
         <div className="row" key={role}>
-          <label>{role}</label>
+          <label>{roleLabel(role)}</label>
           <button
             onClick={() =>
               setRoleCounts((r) => ({ ...r, [role]: Math.max(0, (r[role] || 0) - 1) }))
@@ -23,7 +25,9 @@ export default function RoleConfig({ roleCounts, setRoleCounts, playerCount }) {
           </button>
         </div>
       ))}
-      <p className="muted">{villagers} villager{villagers === 1 ? "" : "s"} fill the rest ({playerCount} players)</p>
+      <p className="muted">
+        {civilians} civilian{civilians === 1 ? "" : "s"} fill the rest ({playerCount} players)
+      </p>
     </div>
   );
 }

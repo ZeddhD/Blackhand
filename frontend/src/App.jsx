@@ -3,6 +3,7 @@ import { useGameSocket } from "./useGameSocket";
 import MafiaChat from "./components/MafiaChat";
 import RoleConfig from "./components/RoleConfig";
 import Timer from "./components/Timer";
+import { ROLE_INFO, roleLabel } from "./roles";
 
 function codeFromUrl() {
   const path = window.location.pathname.replace(/\//g, "");
@@ -44,6 +45,7 @@ export default function App() {
     return (
       <div className="screen center">
         <h1 className="title">MAFIA</h1>
+        <p className="credit">made by ZeddhD</p>
         <p className="muted">{connected ? "Ready." : "Connecting..."}</p>
         <div className="card">
           <input
@@ -73,6 +75,7 @@ export default function App() {
           </div>
         </div>
         {error && <p className="error">{error}</p>}
+        <RoleExplainer />
       </div>
     );
   }
@@ -80,6 +83,7 @@ export default function App() {
   const isHost = state.is_host === true;
   const alivePlayers = state.players.filter((p) => p.alive);
   const others = state.players.filter((p) => p.id !== playerId);
+  const isDead = state.phase !== "lobby" && state.phase !== "game_over" && !state.your_alive;
 
   return (
     <div className="screen">
@@ -93,20 +97,15 @@ export default function App() {
       {error && <p className="error">{error}</p>}
 
       {state.phase === "lobby" && (
-        <Lobby
-          state={state}
-          isHost={isHost}
-          onStart={startGame}
-          onLeave={leaveRoom}
-        />
+        <Lobby state={state} isHost={isHost} onStart={startGame} onLeave={leaveRoom} />
       )}
 
       {state.phase !== "lobby" && state.phase !== "game_over" && (
         <div className="card">
           <p className="role-badge">
-            You are: <strong>{state.your_role?.toUpperCase()}</strong>{" "}
-            {!state.your_alive && <span className="dead">(dead)</span>}
+            You are: <strong>{roleLabel(state.your_role)}</strong>
           </p>
+          <p className="role-secret">Do not reveal your role until the game ends.</p>
           {state.allies?.length > 0 && (
             <p className="muted">Fellow Mafia: {state.allies.join(", ")}</p>
           )}
@@ -116,7 +115,9 @@ export default function App() {
         </div>
       )}
 
-      {state.phase === "night" && state.your_alive && (
+      {isDead && <DeadPanel state={state} />}
+
+      {!isDead && state.phase === "night" && (
         <NightPanel
           state={state}
           others={others}
@@ -126,20 +127,20 @@ export default function App() {
         />
       )}
 
-      {state.your_role === "mafia" && state.phase === "night" && (
+      {!isDead && state.your_role === "mafia" && state.phase === "night" && (
         <MafiaChat messages={mafiaChat} onSend={sendMafiaChat} />
       )}
 
-      {state.phase === "day_discussion" && (
+      {!isDead && state.phase === "day_discussion" && (
         <div className="card center">
           <h2>Day Discussion</h2>
           <p className="muted">Talk it out over voice. Voting starts when the timer ends.</p>
         </div>
       )}
 
-      {state.phase === "voting" && state.your_alive && (
+      {!isDead && state.phase === "voting" && (
         <div className="card">
-          <h2>Vote to Lynch</h2>
+          <h2>Vote to Remove a Player</h2>
           <ul className="player-list">
             {alivePlayers.map((p) => (
               <li key={p.id}>
@@ -155,16 +156,7 @@ export default function App() {
         </div>
       )}
 
-      {state.phase === "game_over" && (
-        <div className="card center">
-          <h1 className="title">{state.winner === "town" ? "Town Wins" : "Mafia Wins"}</h1>
-          <ul className="player-list">
-            {state.players.map((p) => (
-              <li key={p.id}>{p.name} {!p.alive && <span className="dead">(dead)</span>}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {state.phase === "game_over" && <GameOverPanel state={state} />}
 
       <EventLog events={state.events} privateLog={state.private_log} />
 
@@ -173,6 +165,20 @@ export default function App() {
           Skip timer (host)
         </button>
       )}
+    </div>
+  );
+}
+
+function RoleExplainer() {
+  return (
+    <div className="card role-explainer">
+      <h2>How to Play</h2>
+      {Object.values(ROLE_INFO).map((r) => (
+        <div key={r.key} className="role-explainer-item">
+          <p className="role-explainer-name">{r.label}</p>
+          <p className="muted">{r.text}</p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -212,7 +218,7 @@ function Lobby({ state, isHost, onStart, onLeave }) {
               <label>Voting (sec)</label>
               <input type="number" min={15} max={600} value={voting} onChange={(e) => setVoting(e.target.value)} />
             </div>
-            <p className="muted">Night has no timer -- it ends once every active role has acted.</p>
+            <p className="muted">Night has no timer. It ends once every active role has acted.</p>
           </div>
           <button
             disabled={state.players.length < 4}
@@ -230,6 +236,12 @@ function Lobby({ state, isHost, onStart, onLeave }) {
     </div>
   );
 }
+
+const ACTION_TITLE = {
+  kill: "Choose someone to kill",
+  protect: "Choose someone to protect",
+  investigate: "Choose someone to investigate",
+};
 
 function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAction }) {
   const role = state.your_role;
@@ -254,19 +266,27 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
   }
 
   const targets = actionType === "protect" ? state.players.filter((p) => p.alive) : others.filter((p) => p.alive);
+  const selectedId = role === "mafia" ? state.mafia_kill_target_id : selectedTarget;
 
   return (
     <div className="card">
       <div className="silent-banner compact">
         <p className="silent-banner-text">STAY SILENT</p>
       </div>
-      <h2>Night — {actionType}</h2>
+      <h2>{ACTION_TITLE[actionType]}</h2>
+      {role === "mafia" && (
+        <p className="muted">
+          {state.mafia_kill_target_name
+            ? `Team target: ${state.mafia_kill_target_name}. Any Mafia member can change it.`
+            : "No target chosen yet."}
+        </p>
+      )}
       {progress}
       <ul className="player-list">
         {targets.map((p) => (
           <li key={p.id}>
             <button
-              className={selectedTarget === p.id ? "selected" : ""}
+              className={selectedId === p.id ? "selected" : ""}
               onClick={() => {
                 setSelectedTarget(p.id);
                 nightAction(actionType, p.id);
@@ -281,12 +301,65 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
   );
 }
 
+function DeadPanel({ state }) {
+  return (
+    <div className="dead-banner">
+      <p className="dead-banner-text">YOU ARE DEAD</p>
+      <p className="dead-banner-sub">You cannot talk or use voice chat for the rest of the game.</p>
+      <p className="muted">You can now see everything that happens, round by round.</p>
+      <RoundLog log={state.round_log} />
+    </div>
+  );
+}
+
+function RoundLog({ log }) {
+  if (!log?.length) return null;
+  return (
+    <div className="round-log">
+      <h3>Game Log</h3>
+      {log.map((round, i) => (
+        <div key={i} className="round-log-entry">
+          <p className="round-log-title">{round.title}</p>
+          {round.lines.map((line, j) => (
+            <p key={j} className="round-log-line">
+              {line}
+            </p>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GameOverPanel({ state }) {
+  const mafiaWon = state.winner === "mafia";
+  return (
+    <div className="card center">
+      <h1 className="title">{mafiaWon ? "Mafia Win" : "Civilians Win"}</h1>
+      {mafiaWon ? (
+        <>
+          <p className="muted">The winning Mafia:</p>
+          <p className="winner-names">{state.mafia_reveal?.join(", ")}</p>
+        </>
+      ) : (
+        <>
+          <p className="muted">The Mafia were caught. They were:</p>
+          <p className="winner-names">{state.mafia_reveal?.join(", ") || "no one"}</p>
+        </>
+      )}
+      <RoundLog log={state.round_log} />
+    </div>
+  );
+}
+
 function EventLog({ events, privateLog }) {
   if (!events?.length && !privateLog?.length) return null;
   return (
     <div className="card log">
       {privateLog?.map((msg, i) => (
-        <p key={`p${i}`} className="private-log">{msg}</p>
+        <p key={`p${i}`} className="private-log">
+          {msg}
+        </p>
       ))}
       {events?.map((msg, i) => (
         <p key={`e${i}`}>{msg}</p>
