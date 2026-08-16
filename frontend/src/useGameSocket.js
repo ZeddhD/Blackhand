@@ -67,7 +67,7 @@ export function useGameSocket() {
           setMafiaChat(msg.messages);
           break;
         case "timer":
-          setTimer({ phase: msg.phase, secondsLeft: msg.seconds_left });
+          setTimer({ phase: msg.phase, secondsLeft: msg.seconds_left, totalSeconds: msg.total_seconds });
           break;
         case "error":
           setError(msg.message);

@@ -11,6 +11,7 @@ export default function MafiaChat({ messages, onSend }) {
 
   return (
     <div className="card mafia-chat">
+      <div className="card-tab tab-blood">Private</div>
       <h2>Mafia Channel</h2>
       <div className="chat-log">
         {messages.map((m, i) => (
@@ -26,7 +27,9 @@ export default function MafiaChat({ messages, onSend }) {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
         />
-        <button onClick={submit}>Send</button>
+        <button className="primary" onClick={submit}>
+          Send
+        </button>
       </div>
     </div>
   );
