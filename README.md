@@ -98,7 +98,7 @@ the Civilians win, the names of everyone who was secretly Mafia are shown.
 python -m venv venv
 ./venv/Scripts/activate        # Windows; use `source venv/bin/activate` on macOS/Linux
 pip install -r requirements-dev.txt
-pytest tests/ -q                # 29 headless engine tests
+pytest tests/ -q                # 32 headless engine tests
 uvicorn server.main:app --reload --port 8000
 ```
 
@@ -151,9 +151,19 @@ one of those.
   whose role has a night action (Mafia, Doctor, Detective) has submitted
   one -- not on a clock. Each player's screen shows a live "X / Y players
   have acted" count.
-- **Discussion and Voting are host-configurable**, set in the lobby before
-  starting (15-600s each, default 60s). The host can also skip either early
-  with "Skip timer (host)".
+- **Discussion has a fixed, host-configurable duration** (15-600s, default
+  60s), set in the lobby before starting. There's no early-exit signal for
+  it, since talking has no "done" state to detect.
+- **Voting ends on whichever comes first**: the configured timer running
+  out, or every living player casting a vote (`Game.votes_complete`). A
+  player who doesn't want to accuse anyone can hit "Skip My Vote" -- an
+  explicit abstain that still counts as having voted, so the round can end
+  early even without unanimous accusations. Skipped votes are excluded
+  from the lynch tally.
+- There is no host-only "skip timer" control. It was replaced by the
+  above: night ends by itself once everyone's acted, and voting ends by
+  itself once everyone's voted (or skipped) -- no admin override needed
+  for either.
 - Players can leave the lobby before the game starts ("Leave Lobby"); if the
   host leaves, the next remaining player becomes host.
 - After a game ends, anyone in the room can hit "Return to Lobby" to reset

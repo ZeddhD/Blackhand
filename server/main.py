@@ -174,6 +174,8 @@ async def ws_endpoint(websocket: WebSocket):
                     await _send_error(websocket, str(e))
                     continue
                 await broadcast_state(room)
+                if room.game.votes_complete():
+                    room.early_end_event.set()
 
             elif mtype == "mafia_chat":
                 if room is None or player_id is None:
@@ -189,12 +191,6 @@ async def ws_endpoint(websocket: WebSocket):
 
                 room.mafia_chat.append(ChatMessage(player_id=player_id, name=sender.name, text=text))
                 await broadcast_mafia_chat(room)
-
-            elif mtype == "force_advance":
-                if room is None or player_id != room.host_id:
-                    await _send_error(websocket, "Only the host can skip the timer")
-                    continue
-                room.skip_event.set()
 
             else:
                 await _send_error(websocket, f"Unknown message type: {mtype}")

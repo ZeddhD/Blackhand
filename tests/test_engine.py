@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from engine import ActionType, Game, GameConfig, Phase, Role, Team
+from engine import SKIP_VOTE, ActionType, Game, GameConfig, Phase, Role, Team
 
 
 def make_game(room_code="TEST", names=None, role_counts=None):
@@ -254,6 +254,49 @@ def test_dead_player_sees_round_log_but_alive_player_does_not():
     alive_id = next(p.id for p in game.alive_players() if p.id != mafia.id)
     alive_view = game.view_for(alive_id)
     assert "round_log" not in alive_view
+
+
+def test_votes_complete_once_every_alive_player_has_voted():
+    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.MAFIA: 1})
+    game.start_game()
+    game.resolve_night()
+    game.begin_voting()
+    a, b, c, d = game.players
+    assert not game.votes_complete()
+    game.submit_vote(a.id, b.id)
+    game.submit_vote(b.id, a.id)
+    game.submit_vote(c.id, SKIP_VOTE)
+    assert not game.votes_complete()
+    game.submit_vote(d.id, SKIP_VOTE)
+    assert game.votes_complete()
+
+
+def test_skip_vote_does_not_count_toward_lynch_tally():
+    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.MAFIA: 1})
+    game.start_game()
+    game.resolve_night()
+    game.begin_voting()
+    a, b, c, d = game.players
+    for p in (a, b, c, d):
+        game.submit_vote(p.id, SKIP_VOTE)
+    alive_before = {p.id for p in game.alive_players()}
+    game.resolve_lynch()
+    alive_after = {p.id for p in game.alive_players()}
+    assert alive_before == alive_after  # everyone skipped -- no lynch
+
+
+def test_votes_complete_ignores_dead_players():
+    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.MAFIA: 1})
+    game.start_game()
+    # Kill a non-Mafia player so the game doesn't end before reaching voting.
+    dead = next(p for p in game.players if p.role is not Role.MAFIA)
+    dead.alive = False
+    game.resolve_night()
+    game.begin_voting()
+    remaining = [p for p in game.players if p.alive]
+    for p in remaining:
+        game.submit_vote(p.id, SKIP_VOTE)
+    assert game.votes_complete()
 
 
 def test_return_to_lobby_resets_game_for_a_rematch():

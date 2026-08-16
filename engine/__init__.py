@@ -1,5 +1,5 @@
 from .models import Role, Team, Phase, Player, GameConfig, InvestigationResult
-from .game import Game
+from .game import Game, SKIP_VOTE
 from .actions import NightAction, ActionType
 
 __all__ = [
@@ -10,6 +10,7 @@ __all__ = [
     "GameConfig",
     "InvestigationResult",
     "Game",
+    "SKIP_VOTE",
     "NightAction",
     "ActionType",
 ]

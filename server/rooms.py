@@ -37,7 +37,7 @@ class Room:
     connections: Dict[str, WebSocket] = field(default_factory=dict)
     connected: Dict[str, bool] = field(default_factory=dict)
     mafia_chat: List[ChatMessage] = field(default_factory=list)
-    skip_event: asyncio.Event = field(default_factory=asyncio.Event)
+    early_end_event: asyncio.Event = field(default_factory=asyncio.Event)
     night_ready_event: asyncio.Event = field(default_factory=asyncio.Event)
     runner_task: Optional[asyncio.Task] = None
     seconds_left: int = 0
@@ -122,33 +122,32 @@ async def broadcast_mafia_chat(room: Room) -> None:
 
 
 async def _countdown(room: Room, seconds: int) -> None:
-    room.skip_event.clear()
+    """Counts down, but ends early if room.early_end_event is set -- used by
+    Voting once every living player has voted (see votes_complete)."""
+    room.early_end_event.clear()
     for remaining in range(seconds, 0, -1):
         await broadcast_timer(room, remaining, seconds)
         try:
-            await asyncio.wait_for(room.skip_event.wait(), timeout=1.0)
-            break  # host force-advanced
+            await asyncio.wait_for(room.early_end_event.wait(), timeout=1.0)
+            break  # ended early
         except asyncio.TimeoutError:
             continue
-    room.skip_event.clear()
+    room.early_end_event.clear()
 
 
 async def _wait_for_night(room: Room) -> None:
     """Night has no fixed duration -- it ends once every living player whose
-    role has a night action has submitted one, or the host force-advances."""
-    room.skip_event.clear()
+    role has a night action has submitted one."""
+    room.early_end_event.clear()
     room.night_ready_event.clear()
     if room.game.night_actions_ready():
         return
     ready = asyncio.ensure_future(room.night_ready_event.wait())
-    skipped = asyncio.ensure_future(room.skip_event.wait())
     try:
-        await asyncio.wait({ready, skipped}, return_when=asyncio.FIRST_COMPLETED)
+        await asyncio.wait({ready}, return_when=asyncio.FIRST_COMPLETED)
     finally:
-        for task in (ready, skipped):
-            if not task.done():
-                task.cancel()
-        room.skip_event.clear()
+        if not ready.done():
+            ready.cancel()
         room.night_ready_event.clear()
 
 

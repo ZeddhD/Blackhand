@@ -17,6 +17,9 @@ import {
   unlockAudio,
 } from "./sound";
 
+// Must match engine.game.SKIP_VOTE exactly -- not a real player id.
+const SKIP_VOTE = "skip";
+
 function codeFromUrl() {
   const path = window.location.pathname.replace(/\//g, "");
   return path.length === 4 ? path.toUpperCase() : "";
@@ -46,7 +49,6 @@ export default function App() {
     nightAction,
     vote,
     sendMafiaChat,
-    forceAdvance,
   } = useGameSocket();
 
   const [name, setName] = useState("");
@@ -213,6 +215,14 @@ export default function App() {
         <div className="card">
           <div className="card-tab tab-blood">Vote</div>
           <h2>Vote to Remove a Player</h2>
+          <p className="muted">
+            Voting ends when the timer runs out, or as soon as everyone has voted.
+          </p>
+          {state.votes_total != null && (
+            <p className="night-progress">
+              {state.votes_done} / {state.votes_total} players have voted
+            </p>
+          )}
           <ul className="player-list">
             {alivePlayers.map((p) => (
               <li key={p.id}>
@@ -226,6 +236,12 @@ export default function App() {
               </li>
             ))}
           </ul>
+          <button
+            className={state.votes[playerId] === SKIP_VOTE ? "selected" : "ghost"}
+            onClick={() => vote(SKIP_VOTE)}
+          >
+            Skip My Vote
+          </button>
         </div>
       )}
 
@@ -234,12 +250,6 @@ export default function App() {
       )}
 
       <EventLog events={state.events} privateLog={state.private_log} />
-
-      {isHost && state.phase !== "lobby" && state.phase !== "game_over" && (
-        <button className="ghost" onClick={forceAdvance}>
-          Skip timer (host)
-        </button>
-      )}
     </div>
   );
 }
