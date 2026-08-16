@@ -12,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from engine import ActionType, GameConfig, Phase, Role
 from engine.game import IllegalActionError
 from .rooms import (
+    MAX_PHASE_SECONDS,
+    MIN_PHASE_SECONDS,
     ROLE_BY_NAME,
     Room,
     RoomManager,
@@ -104,6 +106,17 @@ async def ws_endpoint(websocket: WebSocket):
                     if name in ROLE_BY_NAME and count
                 }
                 room.game.config = GameConfig(role_counts=role_counts)
+                timers = msg.get("timers") or {}
+
+                def _clamp_seconds(value, fallback):
+                    try:
+                        value = int(value)
+                    except (TypeError, ValueError):
+                        return fallback
+                    return max(MIN_PHASE_SECONDS, min(MAX_PHASE_SECONDS, value))
+
+                room.discussion_seconds = _clamp_seconds(timers.get("discussion"), room.discussion_seconds)
+                room.voting_seconds = _clamp_seconds(timers.get("voting"), room.voting_seconds)
                 try:
                     room.game.start_game()
                 except IllegalActionError as e:
@@ -122,6 +135,24 @@ async def ws_endpoint(websocket: WebSocket):
                     await _send_error(websocket, str(e))
                     continue
                 await broadcast_state(room)
+                if room.game.night_actions_ready():
+                    room.night_ready_event.set()
+
+            elif mtype == "leave_room":
+                if room is None or player_id is None:
+                    continue
+                try:
+                    room.game.remove_player(player_id)
+                except IllegalActionError as e:
+                    await _send_error(websocket, str(e))
+                    continue
+                _detach(room, player_id)
+                room.connected.pop(player_id, None)
+                room.reassign_host_if_needed()
+                left_room, left_player = room, player_id
+                room, player_id = None, None
+                await websocket.send_json({"type": "left"})
+                await broadcast_state(left_room)
 
             elif mtype == "vote":
                 if room is None or player_id is None:

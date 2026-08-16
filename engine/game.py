@@ -62,6 +62,11 @@ class Game:
         self.players.append(player)
         return player
 
+    def remove_player(self, player_id: str) -> None:
+        if self.phase != Phase.LOBBY:
+            raise IllegalActionError("Cannot leave after the game has started")
+        self.players = [p for p in self.players if p.id != player_id]
+
     def player(self, player_id: str) -> Player:
         for p in self.players:
             if p.id == player_id:
@@ -95,6 +100,16 @@ class Game:
         self.night_number += 1
         self.pending_actions.clear()
         self.private_log.clear()
+
+    NIGHT_ACTION_ROLES = (Role.MAFIA, Role.DOCTOR, Role.DETECTIVE)
+
+    def required_night_actor_ids(self) -> set:
+        """Living players whose role has a night action -- night resolves as
+        soon as all of them have acted, rather than waiting out a timer."""
+        return {p.id for p in self.alive_players() if p.role in self.NIGHT_ACTION_ROLES}
+
+    def night_actions_ready(self) -> bool:
+        return self.required_night_actor_ids() <= set(self.pending_actions.keys())
 
     def submit_night_action(self, actor_id: str, action_type: ActionType, target_id: str) -> None:
         if self.phase != Phase.NIGHT:
@@ -277,4 +292,8 @@ class Game:
             base["allies"] = [p.name for p in self.mafia_team() if p.id != me.id]
         if me.role == Role.GODFATHER:
             base["known_mafia"] = [p.name for p in self.mafia_team()]
+        if self.phase == Phase.NIGHT:
+            required = self.required_night_actor_ids()
+            base["night_actions_total"] = len(required)
+            base["night_actions_done"] = len(required & set(self.pending_actions.keys()))
         return base

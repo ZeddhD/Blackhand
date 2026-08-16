@@ -242,3 +242,33 @@ def test_full_headless_12_player_game_runs_to_completion():
 
 def role_team_is_town(player):
     return player.role in (Role.VILLAGER, Role.DETECTIVE, Role.DOCTOR)
+
+
+def test_remove_player_in_lobby():
+    game = make_game(names=["A", "B", "C", "D"])
+    game.remove_player("1")
+    assert [p.id for p in game.players] == ["0", "2", "3"]
+
+
+def test_remove_player_after_start_is_rejected():
+    game = make_game(role_counts={Role.MAFIA: 1})
+    game.start_game()
+    with pytest.raises(Exception):
+        game.remove_player(game.players[0].id)
+
+
+def test_night_actions_ready_tracks_required_actors():
+    game = make_game(role_counts={Role.MAFIA: 1, Role.DOCTOR: 1, Role.DETECTIVE: 1})
+    game.start_game()
+    mafia = by_role(game, Role.MAFIA)[0]
+    doctor = by_role(game, Role.DOCTOR)[0]
+    detective = by_role(game, Role.DETECTIVE)[0]
+    villager = by_role(game, Role.VILLAGER)[0]
+
+    assert not game.night_actions_ready()
+    game.submit_night_action(mafia.id, ActionType.KILL, villager.id)
+    assert not game.night_actions_ready()
+    game.submit_night_action(doctor.id, ActionType.PROTECT, villager.id)
+    assert not game.night_actions_ready()
+    game.submit_night_action(detective.id, ActionType.INVESTIGATE, villager.id)
+    assert game.night_actions_ready()

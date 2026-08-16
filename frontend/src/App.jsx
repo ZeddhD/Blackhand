@@ -21,6 +21,7 @@ export default function App() {
     createRoom,
     joinRoom,
     startGame,
+    leaveRoom,
     nightAction,
     vote,
     sendMafiaChat,
@@ -84,7 +85,9 @@ export default function App() {
     <div className="screen">
       <header className="topbar">
         <span className="room-code">Room {roomCode}</span>
-        {timer && timer.secondsLeft != null && <Timer seconds={timer.secondsLeft} phase={timer.phase} />}
+        {timer && timer.phase === state.phase && timer.secondsLeft != null && (
+          <Timer seconds={timer.secondsLeft} phase={timer.phase} />
+        )}
       </header>
 
       {error && <p className="error">{error}</p>}
@@ -94,6 +97,7 @@ export default function App() {
           state={state}
           isHost={isHost}
           onStart={startGame}
+          onLeave={leaveRoom}
         />
       )}
 
@@ -173,27 +177,56 @@ export default function App() {
   );
 }
 
-function Lobby({ state, isHost, onStart }) {
+function Lobby({ state, isHost, onStart, onLeave }) {
   const [roleCounts, setRoleCounts] = useState({ mafia: 1, detective: 1, doctor: 1, godfather: 0 });
+  const [discussion, setDiscussion] = useState(60);
+  const [voting, setVoting] = useState(60);
+
   return (
     <div className="card">
       <h2>Lobby</h2>
       <p className="muted">Share the code above. Players join at /{"<CODE>"} on their phones.</p>
       <ul className="player-list">
         {state.players.map((p) => (
-          <li key={p.id}>{p.name}</li>
+          <li key={p.id} className="lobby-player">
+            {p.name}
+          </li>
         ))}
       </ul>
       {isHost ? (
         <>
           <RoleConfig roleCounts={roleCounts} setRoleCounts={setRoleCounts} playerCount={state.players.length} />
-          <button disabled={state.players.length < 4} onClick={() => onStart(roleCounts)}>
+          <div className="role-config">
+            <h3>Timers</h3>
+            <div className="row">
+              <label>Discussion (sec)</label>
+              <input
+                type="number"
+                min={15}
+                max={600}
+                value={discussion}
+                onChange={(e) => setDiscussion(e.target.value)}
+              />
+            </div>
+            <div className="row">
+              <label>Voting (sec)</label>
+              <input type="number" min={15} max={600} value={voting} onChange={(e) => setVoting(e.target.value)} />
+            </div>
+            <p className="muted">Night has no timer -- it ends once every active role has acted.</p>
+          </div>
+          <button
+            disabled={state.players.length < 4}
+            onClick={() => onStart(roleCounts, { discussion, voting })}
+          >
             Start Game
           </button>
         </>
       ) : (
         <p className="muted">Waiting for the host to start...</p>
       )}
+      <button className="ghost" onClick={onLeave}>
+        Leave Lobby
+      </button>
     </div>
   );
 }
@@ -203,11 +236,19 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
   const actionByRole = { mafia: "kill", doctor: "protect", detective: "investigate" };
   const actionType = actionByRole[role];
 
+  const progress =
+    state.night_actions_total != null ? (
+      <p className="night-progress">
+        {state.night_actions_done} / {state.night_actions_total} players have acted
+      </p>
+    ) : null;
+
   if (!actionType) {
     return (
-      <div className="card center">
-        <h2>Night Falls</h2>
-        <p className="muted">The mafia are choosing. Stay silent.</p>
+      <div className="silent-banner">
+        <p className="silent-banner-text">STAY SILENT</p>
+        <p className="muted">The active roles are deciding. No talking until day.</p>
+        {progress}
       </div>
     );
   }
@@ -216,7 +257,11 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
 
   return (
     <div className="card">
+      <div className="silent-banner compact">
+        <p className="silent-banner-text">STAY SILENT</p>
+      </div>
       <h2>Night — {actionType}</h2>
+      {progress}
       <ul className="player-list">
         {targets.map((p) => (
           <li key={p.id}>
