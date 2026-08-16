@@ -47,7 +47,7 @@ Godfather has no chat access until promoted) and were fixed before shipping.
 python -m venv venv
 ./venv/Scripts/activate        # Windows; use `source venv/bin/activate` on macOS/Linux
 pip install -r requirements-dev.txt
-pytest tests/ -q                # 19 headless engine tests
+pytest tests/ -q                # 22 headless engine tests
 uvicorn server.main:app --reload --port 8000
 ```
 
@@ -94,10 +94,17 @@ tier, no credit card required):
 Fly.io and Railway also work with the same `Dockerfile` if you'd rather use
 one of those.
 
-## Playtested defaults
+## Timers
 
-- Night: 75s, Discussion: 60s, Voting: 60s (`server/rooms.py`). The host can
-  skip any timer early with "Skip timer (host)".
+- **Night has no fixed duration.** It ends as soon as every living player
+  whose role has a night action (Mafia, Doctor, Detective) has submitted
+  one -- not on a clock. Each player's screen shows a live "X / Y players
+  have acted" count.
+- **Discussion and Voting are host-configurable**, set in the lobby before
+  starting (15-600s each, default 60s). The host can also skip either early
+  with "Skip timer (host)".
+- Players can leave the lobby before the game starts ("Leave Lobby"); if the
+  host leaves, the next remaining player becomes host.
 - Suggested room size: 8-12 players, ~1 mafia per 3-4 players (spec section 7).
 
 ## Known limitations (spec section 10, by design)

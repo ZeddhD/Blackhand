@@ -13,9 +13,10 @@ from fastapi import WebSocket
 
 from engine import ActionType, Game, GameConfig, Phase, Role
 
-NIGHT_SECONDS = 75
-DISCUSSION_SECONDS = 60
-VOTING_SECONDS = 60
+DEFAULT_DISCUSSION_SECONDS = 60
+DEFAULT_VOTING_SECONDS = 60
+MIN_PHASE_SECONDS = 15
+MAX_PHASE_SECONDS = 600
 
 ROLE_BY_NAME = {r.value: r for r in Role}
 
@@ -37,8 +38,16 @@ class Room:
     connected: Dict[str, bool] = field(default_factory=dict)
     mafia_chat: List[ChatMessage] = field(default_factory=list)
     skip_event: asyncio.Event = field(default_factory=asyncio.Event)
+    night_ready_event: asyncio.Event = field(default_factory=asyncio.Event)
     runner_task: Optional[asyncio.Task] = None
     seconds_left: int = 0
+    discussion_seconds: int = DEFAULT_DISCUSSION_SECONDS
+    voting_seconds: int = DEFAULT_VOTING_SECONDS
+
+    def reassign_host_if_needed(self) -> None:
+        if self.host_id is not None and any(p.id == self.host_id for p in self.game.players):
+            return
+        self.host_id = self.game.players[0].id if self.game.players else None
 
     def mafia_channel_ids(self) -> set:
         # mafia_team() reflects promotion automatically: once the engine
@@ -119,6 +128,25 @@ async def _countdown(room: Room, seconds: int) -> None:
     room.skip_event.clear()
 
 
+async def _wait_for_night(room: Room) -> None:
+    """Night has no fixed duration -- it ends once every living player whose
+    role has a night action has submitted one, or the host force-advances."""
+    room.skip_event.clear()
+    room.night_ready_event.clear()
+    if room.game.night_actions_ready():
+        return
+    ready = asyncio.ensure_future(room.night_ready_event.wait())
+    skipped = asyncio.ensure_future(room.skip_event.wait())
+    try:
+        await asyncio.wait({ready, skipped}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for task in (ready, skipped):
+            if not task.done():
+                task.cancel()
+        room.skip_event.clear()
+        room.night_ready_event.clear()
+
+
 async def run_room(room: Room) -> None:
     """Drives the state machine: NIGHT -> RESOLVE -> DAY -> VOTING -> RESOLVE -> ...
 
@@ -129,18 +157,22 @@ async def run_room(room: Room) -> None:
     try:
         while game.phase != Phase.GAME_OVER:
             if game.phase == Phase.NIGHT:
-                await _countdown(room, NIGHT_SECONDS)
+                await _wait_for_night(room)
                 game.resolve_night()
                 await broadcast_state(room)
                 if game.phase == Phase.GAME_OVER:
                     break
             if game.phase == Phase.DAY_DISCUSSION:
-                await _countdown(room, DISCUSSION_SECONDS)
+                await _countdown(room, room.discussion_seconds)
                 game.begin_voting()
                 await broadcast_state(room)
             if game.phase == Phase.VOTING:
-                await _countdown(room, VOTING_SECONDS)
+                await _countdown(room, room.voting_seconds)
                 game.resolve_lynch()
                 await broadcast_state(room)
     except asyncio.CancelledError:
         pass
+    except Exception:
+        import traceback
+
+        traceback.print_exc()

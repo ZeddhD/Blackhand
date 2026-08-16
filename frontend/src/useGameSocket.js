@@ -53,6 +53,16 @@ export function useGameSocket() {
         case "state":
           setState(msg.state);
           break;
+        case "left":
+          localStorage.removeItem("mafia_room_code");
+          localStorage.removeItem("mafia_player_id");
+          window.history.replaceState(null, "", "/");
+          setState(null);
+          setRoomCode(null);
+          setPlayerId(null);
+          setTimer(null);
+          setMafiaChat([]);
+          break;
         case "mafia_chat":
           setMafiaChat(msg.messages);
           break;
@@ -72,7 +82,11 @@ export function useGameSocket() {
 
   const createRoom = useCallback((name) => send({ type: "create_room", name }), [send]);
   const joinRoom = useCallback((code, name) => send({ type: "join", room_code: code, name }), [send]);
-  const startGame = useCallback((roleCounts) => send({ type: "start_game", role_counts: roleCounts }), [send]);
+  const startGame = useCallback(
+    (roleCounts, timers) => send({ type: "start_game", role_counts: roleCounts, timers }),
+    [send]
+  );
+  const leaveRoom = useCallback(() => send({ type: "leave_room" }), [send]);
   const nightAction = useCallback(
     (actionType, targetId) => send({ type: "night_action", action_type: actionType, target_id: targetId }),
     [send]
@@ -92,6 +106,7 @@ export function useGameSocket() {
     createRoom,
     joinRoom,
     startGame,
+    leaveRoom,
     nightAction,
     vote,
     sendMafiaChat,
