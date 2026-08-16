@@ -9,7 +9,7 @@ export default function Timer({ seconds, phase }) {
   const ss = String(seconds % 60).padStart(2, "0");
   return (
     <span className="timer">
-      {PHASE_LABEL[phase] || phase} — {mm}:{ss}
+      {PHASE_LABEL[phase] || phase}: {mm}:{ss}
     </span>
   );
 }

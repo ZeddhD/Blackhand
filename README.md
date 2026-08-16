@@ -13,17 +13,33 @@ Built from `mafia-game-spec.md`.
   views, reconnection, phase timers).
 - **`frontend/`** -- React (Vite) client.
 
+## Role names
+
+The engine and network protocol still use the original spec names
+internally (`detective`, `doctor`, `villager`), but the UI displays them as:
+
+| Internal name | Displayed as |
+|---|---|
+| villager | Civilian |
+| detective | Police |
+| doctor | Healer |
+| mafia | Mafia |
+| godfather | Godfather |
+
+This is a display-only rename (`frontend/src/roles.js`); role behavior is
+unchanged.
+
 ## Decisions on the spec's open ambiguities (section 6)
 
 The spec explicitly leaves these for the implementer to decide and document:
 
-- **Doctor self-heal:** allowed, but only **once per game**.
-- **Doctor same target on consecutive nights:** not allowed.
-- **Roleblocked Detective:** gets an explicit "blocked" result rather than
+- **Healer self-heal:** allowed, but only **once per game**.
+- **Healer same target on consecutive nights:** not allowed.
+- **Roleblocked Police:** gets an explicit "blocked" result rather than
   silence. (No v1 role can roleblock, so this never actually fires yet --
   the engine's resolution pipeline reserves the stage for a future
   Roleblocker/Redirector role.)
-- **Detective investigating someone who died the same night:** sees their
+- **Police investigating someone who died the same night:** sees their
   true role. Kills resolve before investigations in the pipeline, but a
   player's role never changes on death, so the result is accurate either way.
 - **Last Mafia dies at night vs. Godfather dying "the same night":** there's
@@ -31,13 +47,29 @@ The spec explicitly leaves these for the implementer to decide and document:
   The succession check (`_check_succession`) runs immediately after *both*
   night resolution and lynch resolution, so whichever kill actually happened
   most recently in the phase sequence is authoritative.
-- **Tied mafia kill vote / tied lynch vote:** no kill / no lynch that round.
+- **The Mafia's kill is a single shared choice**, not a per-member vote. Any
+  living Mafia member can set or change the target; it is visible live to
+  the whole Mafia team (`mafia_kill_target_name` in the view). There is
+  never a tie to break, since there is only ever one target. Tied lynch
+  votes still result in no lynch.
 
 Two bugs worth calling out from building this: an early draft let the
 Godfather see the Mafia's private chat before promotion, and let the "allies"
 view for a Mafia player leak the Godfather's identity -- both violate the
 spec's core secrecy requirement (mafia don't know the Godfather; the
 Godfather has no chat access until promoted) and were fixed before shipping.
+
+## Dead players and the game log
+
+Once a player dies, their screen switches to a spectator view: a clear "YOU
+ARE DEAD" banner (they are asked not to talk for the rest of the game) plus
+a full round-by-round log of exactly what happened each night and day,
+including who the Mafia targeted, who the Healer protected, and each Police
+result. Living players never see this level of detail, only the vague
+public feed (e.g. "X was killed during the night"), to keep roles hidden
+until the game ends. The same full log is shown to everyone once the game
+ends, alongside a clear reveal: if the Mafia win, their names are shown; if
+the Civilians win, the names of everyone who was secretly Mafia are shown.
 
 ## Run locally
 
@@ -47,7 +79,7 @@ Godfather has no chat access until promoted) and were fixed before shipping.
 python -m venv venv
 ./venv/Scripts/activate        # Windows; use `source venv/bin/activate` on macOS/Linux
 pip install -r requirements-dev.txt
-pytest tests/ -q                # 22 headless engine tests
+pytest tests/ -q                # 26 headless engine tests
 uvicorn server.main:app --reload --port 8000
 ```
 
