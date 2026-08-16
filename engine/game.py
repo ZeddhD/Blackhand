@@ -39,6 +39,11 @@ class IllegalActionError(Exception):
     pass
 
 
+# Sentinel vote value meaning "I choose not to vote for anyone this round."
+# Not a real player id, so it can never collide with one.
+SKIP_VOTE = "skip"
+
+
 @dataclass
 class Game:
     room_code: str
@@ -255,12 +260,18 @@ class Game:
         voter = self.player(voter_id)
         if not voter.alive:
             raise IllegalActionError("Dead players cannot vote")
-        if not self.player(target_id).alive:
+        if target_id != SKIP_VOTE and not self.player(target_id).alive:
             raise IllegalActionError("Cannot vote for a dead player")
         self.votes[voter_id] = target_id
 
     def public_votes(self) -> Dict[str, str]:
         return dict(self.votes)
+
+    def votes_complete(self) -> bool:
+        """Voting ends as soon as every living player has voted (for someone
+        or to skip), the same way night ends once every active role has
+        acted -- no need to wait out the full timer if nobody is undecided."""
+        return {p.id for p in self.alive_players()} <= set(self.votes.keys())
 
     def resolve_lynch(self) -> None:
         if self.phase != Phase.VOTING:
@@ -269,6 +280,8 @@ class Game:
         lines: List[str] = []
         tally: Dict[str, int] = {}
         for target_id in self.votes.values():
+            if target_id == SKIP_VOTE:
+                continue
             tally[target_id] = tally.get(target_id, 0) + 1
 
         if tally:
@@ -361,6 +374,9 @@ class Game:
             base["night_actions_done"] = len(required & set(self.pending_actions.keys())) + (
                 1 if mafia_alive_exists and self.mafia_kill_target else 0
             )
+        if self.phase == Phase.VOTING:
+            base["votes_total"] = len(self.alive_players())
+            base["votes_done"] = len(self.votes)
         if not me.alive or self.phase == Phase.GAME_OVER:
             base["round_log"] = list(self.round_log)
         if self.phase == Phase.GAME_OVER:
