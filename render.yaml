@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: mafia-game
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /docs
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
