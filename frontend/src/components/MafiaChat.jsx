@@ -11,7 +11,7 @@ export default function MafiaChat({ messages, onSend }) {
 
   return (
     <div className="card mafia-chat">
-      <h2>🤫 Mafia Channel</h2>
+      <h2>Mafia Channel</h2>
       <div className="chat-log">
         {messages.map((m, i) => (
           <p key={i}>
