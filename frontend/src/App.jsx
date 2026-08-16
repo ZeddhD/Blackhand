@@ -35,10 +35,14 @@ export default function App() {
     setSelectedTarget(null);
   }, [state?.phase, state?.night_number]);
 
+  useEffect(() => {
+    document.body.dataset.phase = state?.phase || "title";
+  }, [state?.phase]);
+
   if (!state) {
     return (
       <div className="screen center">
-        <h1>🔪 Mafia</h1>
+        <h1 className="title">MAFIA</h1>
         <p className="muted">{connected ? "Ready." : "Connecting..."}</p>
         <div className="card">
           <input
@@ -124,14 +128,14 @@ export default function App() {
 
       {state.phase === "day_discussion" && (
         <div className="card center">
-          <h2>☀️ Day Discussion</h2>
+          <h2>Day Discussion</h2>
           <p className="muted">Talk it out over voice. Voting starts when the timer ends.</p>
         </div>
       )}
 
       {state.phase === "voting" && state.your_alive && (
         <div className="card">
-          <h2>🗳️ Vote to lynch</h2>
+          <h2>Vote to Lynch</h2>
           <ul className="player-list">
             {alivePlayers.map((p) => (
               <li key={p.id}>
@@ -149,7 +153,7 @@ export default function App() {
 
       {state.phase === "game_over" && (
         <div className="card center">
-          <h1>{state.winner === "town" ? "🎉 Town Wins!" : "😈 Mafia Wins!"}</h1>
+          <h1 className="title">{state.winner === "town" ? "Town Wins" : "Mafia Wins"}</h1>
           <ul className="player-list">
             {state.players.map((p) => (
               <li key={p.id}>{p.name} {!p.alive && <span className="dead">(dead)</span>}</li>
@@ -202,7 +206,7 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
   if (!actionType) {
     return (
       <div className="card center">
-        <h2>🌙 Night</h2>
+        <h2>Night Falls</h2>
         <p className="muted">The mafia are choosing. Stay silent.</p>
       </div>
     );
@@ -212,7 +216,7 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
 
   return (
     <div className="card">
-      <h2>🌙 Night — {actionType}</h2>
+      <h2>Night — {actionType}</h2>
       <ul className="player-list">
         {targets.map((p) => (
           <li key={p.id}>
@@ -223,7 +227,7 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
                 nightAction(actionType, p.id);
               }}
             >
-              {p.name} {selectedTarget === p.id ? "✓" : ""}
+              {p.name}
             </button>
           </li>
         ))}
@@ -237,7 +241,7 @@ function EventLog({ events, privateLog }) {
   return (
     <div className="card log">
       {privateLog?.map((msg, i) => (
-        <p key={`p${i}`} className="private-log">🔒 {msg}</p>
+        <p key={`p${i}`} className="private-log">{msg}</p>
       ))}
       {events?.map((msg, i) => (
         <p key={`e${i}`}>{msg}</p>
