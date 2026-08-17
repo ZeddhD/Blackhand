@@ -1,5 +1,7 @@
 # Mafia / Werewolf
 
+Link: https://mafia-game-bo9t.onrender.com
+
 Browser-based social deduction game. Players talk over a Discord voice
 channel; the web app owns all private information, roles, and game state.
 Built from `mafia-game-spec.md`.
