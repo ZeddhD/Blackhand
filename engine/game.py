@@ -79,6 +79,15 @@ class Game:
     show_hands_votes: Dict[str, str] = field(default_factory=dict)
     show_hands_count: int = 0
 
+    # The Ledger: full, permanent, public record (section 2.5). Never
+    # removed, never cleaned, never summarized, never reduced to a single
+    # judgment about a player. Every day vote cast (including a change of
+    # mind and a Stand Aside) is appended here as it happens, not just the
+    # final vote per round.
+    vote_history: List[dict] = field(default_factory=list)
+    losing_side_counts: Dict[str, int] = field(default_factory=dict)  # player_id -> rounds on the losing side
+    speaking_seconds: Dict[str, float] = field(default_factory=dict)  # player_id -> accumulated seconds
+
     _watchman_self_heal_used: bool = False
     _watchman_last_target: Optional[str] = None
 
@@ -139,6 +148,9 @@ class Game:
         self._offer_recipient_id = None
         self.show_hands_votes.clear()
         self.show_hands_count = 0
+        self.vote_history.clear()
+        self.losing_side_counts.clear()
+        self.speaking_seconds.clear()
         self._watchman_self_heal_used = False
         self._watchman_last_target = None
         for p in self.players:
@@ -415,6 +427,36 @@ class Game:
         if target_id != SKIP_VOTE and not self.player(target_id).alive:
             raise IllegalActionError("Cannot vote for a dead player")
         self.votes[voter_id] = target_id
+        # The Ledger records every cast, not just the final one per round --
+        # a changed vote is still on the record forever, not overwritten.
+        self.vote_history.append(
+            {
+                "round": self.night_number,
+                "voter_id": voter_id,
+                "target_id": None if target_id == SKIP_VOTE else target_id,
+            }
+        )
+
+    def votes_received(self, player_id: str) -> List[dict]:
+        return [entry for entry in self.vote_history if entry["target_id"] == player_id]
+
+    def _record_losing_side(self, lynched_id: str) -> None:
+        """Everyone whose final vote this round was for someone other than
+        the player actually lynched was on the losing side. A Stand Aside
+        isn't a side at all, and doesn't count either way."""
+        for voter_id, target_id in self.votes.items():
+            if target_id == SKIP_VOTE or target_id == lynched_id:
+                continue
+            self.losing_side_counts[voter_id] = self.losing_side_counts.get(voter_id, 0) + 1
+
+    def record_speaking_time(self, player_id: str, seconds: float) -> None:
+        """A dumb accumulator -- the engine has no opinion on how these
+        seconds were measured (no Discord integration, no mic access exist
+        in this project). Whatever calls this decides that."""
+        if seconds <= 0:
+            return
+        self.player(player_id)  # raises KeyError for an unknown id
+        self.speaking_seconds[player_id] = self.speaking_seconds.get(player_id, 0.0) + seconds
 
     def public_votes(self) -> Dict[str, str]:
         return dict(self.votes)
@@ -447,6 +489,7 @@ class Game:
                     " They were a Hand." if effective_faction(victim) == Faction.HAND else " They were not a Hand."
                 )
                 lines.append(f"{victim.name} was voted out ({top} votes).{caught}")
+                self._record_losing_side(victim.id)
             else:
                 self.events.append("The vote was tied -- no one was voted out.")
                 lines.append("The vote was tied. No one was voted out.")
@@ -498,6 +541,16 @@ class Game:
             "marked": me.marked,
             "private_log": list(self.private_log.get(player_id, [])),
             "winner": self.winner.value if self.winner else None,
+            # The Ledger: public and permanent, visible to everyone at all
+            # times, not gated by phase or alive/dead status (section 2.5).
+            # Raw counts only. Nothing here is ever reduced to a single
+            # computed judgment about who to distrust; that's left to the
+            # players arguing it out.
+            "ledger": {
+                "votes": list(self.vote_history),
+                "losing_side_counts": dict(self.losing_side_counts),
+                "speaking_seconds": dict(self.speaking_seconds),
+            },
         }
         if effective_faction(me) == Faction.HAND:
             base["allies"] = [p.name for p in self.hand_team() if p.id != me.id]
