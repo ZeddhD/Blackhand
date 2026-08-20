@@ -1,4 +1,4 @@
-"""Core data types for the Mafia game engine. No web framework imports."""
+"""Core data types for the Blackhand game engine. No web framework imports."""
 from __future__ import annotations
 
 import random
@@ -8,38 +8,33 @@ from typing import Dict, List, Optional
 
 
 class Role(Enum):
-    VILLAGER = "villager"
-    DETECTIVE = "detective"
-    DOCTOR = "doctor"
-    MAFIA = "mafia"
-    GODFATHER = "godfather"
+    CIVILIAN = "civilian"
+    INSPECTOR = "inspector"
+    WATCHMAN = "watchman"
+    HAND = "hand"
 
 
-class Team(Enum):
-    TOWN = "town"
-    MAFIA = "mafia"
+class Faction(Enum):
+    TABLE = "table"
+    HAND = "hand"
 
 
-# Roles that count as evil for parity / win-condition checks.
-# The Godfather counts as evil even before promotion (spec section 4).
-EVIL_ROLES = {Role.MAFIA, Role.GODFATHER}
+# Roles that count as Black Hand for parity / win-condition checks.
+HAND_ROLES = {Role.HAND}
 
 
-def role_team(role: Role) -> Team:
-    return Team.MAFIA if role in EVIL_ROLES else Team.TOWN
+def faction_of(role: Role) -> Faction:
+    return Faction.HAND if role in HAND_ROLES else Faction.TABLE
 
 
 class InvestigationResult(Enum):
     INNOCENT = "innocent"
     GUILTY = "guilty"
-    BLOCKED = "blocked"  # roleblocked detective; reserved for future roleblocker roles
+    BLOCKED = "blocked"  # roleblocked Inspector; reserved for a future Roleblocker role
 
 
-def detective_reads_as(role: Role) -> InvestigationResult:
-    """The Godfather reads INNOCENT to the Detective (spec section 4) -- non-negotiable."""
-    if role == Role.GODFATHER:
-        return InvestigationResult.INNOCENT
-    if role == Role.MAFIA:
+def inspector_reads_as(role: Role) -> InvestigationResult:
+    if role == Role.HAND:
         return InvestigationResult.GUILTY
     return InvestigationResult.INNOCENT
 
@@ -70,27 +65,25 @@ class Player:
 class GameConfig:
     role_counts: Dict[Role, int] = field(default_factory=dict)
 
-    def evil_count(self) -> int:
-        return sum(
-            count for role, count in self.role_counts.items() if role in EVIL_ROLES
-        )
+    def hand_count(self) -> int:
+        return sum(count for role, count in self.role_counts.items() if role in HAND_ROLES)
 
     def validate(self, player_count: int) -> List[str]:
         errors: List[str] = []
         assigned = sum(self.role_counts.values())
         if assigned > player_count:
-            errors.append(f"{assigned} roles for {player_count} players")
-        if not self.evil_count():
-            errors.append("Need at least one evil role")
-        elif self.evil_count() * 2 >= player_count:
-            errors.append("Evil team starts at parity - game already over")
+            errors.append(f"{assigned} roles assigned for {player_count} players")
+        if self.hand_count() == 0:
+            errors.append("The game needs at least one Hand")
+        elif self.hand_count() * 2 >= player_count:
+            errors.append("The Black Hand already holds the table")
         return errors
 
     def build_role_list(self, player_count: int) -> List[Role]:
-        """Full shuffled role list for `player_count` players (spec section 7)."""
+        """Full shuffled role list for `player_count` players."""
         roles: List[Role] = []
         for role, count in self.role_counts.items():
             roles.extend([role] * count)
-        roles.extend([Role.VILLAGER] * (player_count - len(roles)))
+        roles.extend([Role.CIVILIAN] * (player_count - len(roles)))
         random.shuffle(roles)
         return roles

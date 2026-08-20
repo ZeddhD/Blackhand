@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from engine import SKIP_VOTE, ActionType, Game, GameConfig, Phase, Role, Team
+from engine import SKIP_VOTE, ActionType, Faction, Game, GameConfig, Phase, Role
 
 
 def make_game(room_code="TEST", names=None, role_counts=None):
@@ -17,141 +17,111 @@ def by_role(game: Game, role: Role):
     return [p for p in game.players if p.role is role]
 
 
+def role_faction_is_table(player):
+    return player.role in (Role.CIVILIAN, Role.INSPECTOR, Role.WATCHMAN)
+
+
 def test_config_validate_rejects_too_many_roles():
-    errors = GameConfig(role_counts={Role.MAFIA: 10}).validate(8)
-    assert any("roles for" in e for e in errors)
+    errors = GameConfig(role_counts={Role.HAND: 10}).validate(8)
+    assert any("roles assigned for" in e for e in errors)
 
 
-def test_config_validate_requires_evil_role():
-    errors = GameConfig(role_counts={Role.DOCTOR: 1}).validate(8)
-    assert any("evil role" in e for e in errors)
+def test_config_validate_requires_a_hand():
+    errors = GameConfig(role_counts={Role.WATCHMAN: 1}).validate(8)
+    assert any("at least one Hand" in e for e in errors)
 
 
 def test_config_validate_rejects_parity_start():
-    errors = GameConfig(role_counts={Role.MAFIA: 4}).validate(8)
-    assert any("parity" in e for e in errors)
+    errors = GameConfig(role_counts={Role.HAND: 4}).validate(8)
+    assert any("already holds the table" in e for e in errors)
 
 
-def test_start_game_assigns_all_roles_and_fills_villagers():
-    game = make_game(role_counts={Role.MAFIA: 2, Role.DETECTIVE: 1, Role.DOCTOR: 1})
+def test_start_game_assigns_all_roles_and_fills_civilians():
+    game = make_game(role_counts={Role.HAND: 2, Role.INSPECTOR: 1, Role.WATCHMAN: 1})
     game.start_game()
     assert game.phase == Phase.NIGHT
-    assert len(by_role(game, Role.MAFIA)) == 2
-    assert len(by_role(game, Role.DETECTIVE)) == 1
-    assert len(by_role(game, Role.DOCTOR)) == 1
-    assert len(by_role(game, Role.VILLAGER)) == 4
+    assert len(by_role(game, Role.HAND)) == 2
+    assert len(by_role(game, Role.INSPECTOR)) == 1
+    assert len(by_role(game, Role.WATCHMAN)) == 1
+    assert len(by_role(game, Role.CIVILIAN)) == 4
 
 
-def test_mafia_kill_resolves():
-    game = make_game(role_counts={Role.MAFIA: 1})
+def test_hand_kill_resolves():
+    game = make_game(role_counts={Role.HAND: 1})
     game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    victim = next(p for p in game.players if p.role is not Role.MAFIA)
-    game.submit_night_action(mafia.id, ActionType.KILL, victim.id)
+    hand = by_role(game, Role.HAND)[0]
+    victim = next(p for p in game.players if p.role is not Role.HAND)
+    game.submit_night_action(hand.id, ActionType.KILL, victim.id)
     game.resolve_night()
     assert not victim.alive
     assert game.phase == Phase.DAY_DISCUSSION
 
 
-def test_doctor_can_save_the_target():
-    game = make_game(role_counts={Role.MAFIA: 1, Role.DOCTOR: 1})
+def test_watchman_can_save_the_target():
+    game = make_game(role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
     game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    doctor = by_role(game, Role.DOCTOR)[0]
-    victim = next(p for p in game.players if p.role not in (Role.MAFIA, Role.DOCTOR))
-    game.submit_night_action(mafia.id, ActionType.KILL, victim.id)
-    game.submit_night_action(doctor.id, ActionType.PROTECT, victim.id)
+    hand = by_role(game, Role.HAND)[0]
+    watchman = by_role(game, Role.WATCHMAN)[0]
+    victim = next(p for p in game.players if p.role not in (Role.HAND, Role.WATCHMAN))
+    game.submit_night_action(hand.id, ActionType.KILL, victim.id)
+    game.submit_night_action(watchman.id, ActionType.PROTECT, victim.id)
     game.resolve_night()
     assert victim.alive
 
 
-def test_doctor_self_heal_allowed_once_then_blocked():
-    game = make_game(role_counts={Role.MAFIA: 1, Role.DOCTOR: 1})
+def test_watchman_self_heal_allowed_once_then_blocked():
+    game = make_game(role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
     game.start_game()
-    doctor = by_role(game, Role.DOCTOR)[0]
-    mafia = by_role(game, Role.MAFIA)[0]
-    other = next(p for p in game.players if p.id not in (doctor.id, mafia.id))
+    watchman = by_role(game, Role.WATCHMAN)[0]
+    hand = by_role(game, Role.HAND)[0]
+    other = next(p for p in game.players if p.id not in (watchman.id, hand.id))
 
-    game.submit_night_action(doctor.id, ActionType.PROTECT, doctor.id)
+    game.submit_night_action(watchman.id, ActionType.PROTECT, watchman.id)
     game.resolve_night()
     game.begin_voting()
     game.resolve_lynch()  # no votes cast -> advances to next night
 
     with pytest.raises(Exception):
-        game.submit_night_action(doctor.id, ActionType.PROTECT, doctor.id)
+        game.submit_night_action(watchman.id, ActionType.PROTECT, watchman.id)
 
 
-def test_doctor_cannot_heal_same_target_consecutive_nights():
-    game = make_game(role_counts={Role.MAFIA: 1, Role.DOCTOR: 1})
+def test_watchman_cannot_protect_same_target_consecutive_nights():
+    game = make_game(role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
     game.start_game()
-    doctor = by_role(game, Role.DOCTOR)[0]
-    target = next(p for p in game.players if p.id != doctor.id)
+    watchman = by_role(game, Role.WATCHMAN)[0]
+    target = next(p for p in game.players if p.id != watchman.id)
 
-    game.submit_night_action(doctor.id, ActionType.PROTECT, target.id)
+    game.submit_night_action(watchman.id, ActionType.PROTECT, target.id)
     game.resolve_night()
     game.begin_voting()
     game.resolve_lynch()
 
     with pytest.raises(Exception):
-        game.submit_night_action(doctor.id, ActionType.PROTECT, target.id)
+        game.submit_night_action(watchman.id, ActionType.PROTECT, target.id)
 
 
-def test_detective_sees_godfather_as_innocent():
-    game = make_game(role_counts={Role.MAFIA: 1, Role.GODFATHER: 1, Role.DETECTIVE: 1})
+def test_inspector_sees_hand_as_guilty():
+    game = make_game(role_counts={Role.HAND: 1, Role.INSPECTOR: 1})
     game.start_game()
-    detective = by_role(game, Role.DETECTIVE)[0]
-    gf = by_role(game, Role.GODFATHER)[0]
-    game.submit_night_action(detective.id, ActionType.INVESTIGATE, gf.id)
+    inspector = by_role(game, Role.INSPECTOR)[0]
+    hand = by_role(game, Role.HAND)[0]
+    game.submit_night_action(inspector.id, ActionType.INVESTIGATE, hand.id)
     game.resolve_night()
-    assert any("INNOCENT" in msg for msg in game.private_log.get(detective.id, []))
+    assert any("GUILTY" in msg for msg in game.private_log.get(inspector.id, []))
 
 
-def test_detective_sees_mafia_as_guilty():
-    game = make_game(role_counts={Role.MAFIA: 1, Role.DETECTIVE: 1})
+def test_inspector_sees_civilian_as_innocent():
+    game = make_game(role_counts={Role.HAND: 1, Role.INSPECTOR: 1})
     game.start_game()
-    detective = by_role(game, Role.DETECTIVE)[0]
-    mafia = by_role(game, Role.MAFIA)[0]
-    game.submit_night_action(detective.id, ActionType.INVESTIGATE, mafia.id)
+    inspector = by_role(game, Role.INSPECTOR)[0]
+    civilian = by_role(game, Role.CIVILIAN)[0]
+    game.submit_night_action(inspector.id, ActionType.INVESTIGATE, civilian.id)
     game.resolve_night()
-    assert any("GUILTY" in msg for msg in game.private_log.get(detective.id, []))
-
-
-def test_godfather_promoted_when_last_mafia_dies_at_night():
-    game = make_game(
-        names=[f"P{i}" for i in range(6)],
-        role_counts={Role.MAFIA: 1, Role.GODFATHER: 1},
-    )
-    game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    gf = by_role(game, Role.GODFATHER)[0]
-    mafia.alive = False  # simulate the last regular mafia already dead
-
-    game.resolve_night()  # Godfather has no night action pre-promotion
-    assert gf.role is Role.MAFIA
-    assert any("Mafia" in msg for msg in game.private_log.get(gf.id, []))
-
-
-def test_godfather_promoted_when_last_mafia_lynched():
-    game = make_game(
-        names=[f"P{i}" for i in range(6)],
-        role_counts={Role.MAFIA: 1, Role.GODFATHER: 1},
-    )
-    game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    gf = by_role(game, Role.GODFATHER)[0]
-
-    game.resolve_night()  # nothing submitted, nothing happens
-    game.begin_voting()
-    for p in game.players:
-        if p.alive and p.id != mafia.id:
-            game.submit_vote(p.id, mafia.id)
-    game.resolve_lynch()
-    assert not mafia.alive
-    assert gf.role is Role.MAFIA
+    assert any("INNOCENT" in msg for msg in game.private_log.get(inspector.id, []))
 
 
 def test_tied_lynch_kills_no_one():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.MAFIA: 1})
+    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
     game.start_game()
     a, b, c, d = game.players
     game.resolve_night()
@@ -164,68 +134,57 @@ def test_tied_lynch_kills_no_one():
     assert alive_before == alive_after
 
 
-def test_town_wins_when_all_mafia_dead():
-    game = make_game(names=["A", "B", "C"], role_counts={Role.MAFIA: 1})
+def test_table_wins_when_all_hands_dead():
+    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
     game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    mafia.alive = False
+    hand = by_role(game, Role.HAND)[0]
+    hand.alive = False
     game.resolve_night()
-    assert game.winner == Team.TOWN
+    assert game.winner == Faction.TABLE
     assert game.phase == Phase.GAME_OVER
 
 
-def test_mafia_wins_at_parity():
-    game = make_game(names=["A", "B", "C", "D", "E"], role_counts={Role.MAFIA: 2})
+def test_hand_wins_at_parity():
+    game = make_game(names=["A", "B", "C", "D", "E"], role_counts={Role.HAND: 2})
     game.start_game()
-    villagers = by_role(game, Role.VILLAGER)
-    villagers[0].alive = False
+    civilians = by_role(game, Role.CIVILIAN)
+    civilians[0].alive = False
     game.resolve_night()
-    assert game.winner == Team.MAFIA
+    assert game.winner == Faction.HAND
 
 
-def test_view_for_hides_role_info_from_villager():
-    game = make_game(role_counts={Role.MAFIA: 2, Role.GODFATHER: 1})
+def test_view_for_hides_role_info_from_civilian():
+    game = make_game(role_counts={Role.HAND: 2})
     game.start_game()
-    villager = by_role(game, Role.VILLAGER)[0]
-    view = game.view_for(villager.id)
+    civilian = by_role(game, Role.CIVILIAN)[0]
+    view = game.view_for(civilian.id)
     assert "allies" not in view
-    assert "known_mafia" not in view
     for p in view["players"]:
         assert "role" not in p
 
 
-def test_view_for_mafia_shows_allies_but_not_godfather():
-    game = make_game(role_counts={Role.MAFIA: 2, Role.GODFATHER: 1})
+def test_view_for_hand_shows_allies():
+    game = make_game(role_counts={Role.HAND: 2})
     game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    gf = by_role(game, Role.GODFATHER)[0]
-    view = game.view_for(mafia.id)
-    assert gf.name not in view["allies"]
-
-
-def test_view_for_godfather_shows_known_mafia():
-    game = make_game(role_counts={Role.MAFIA: 2, Role.GODFATHER: 1})
-    game.start_game()
-    gf = by_role(game, Role.GODFATHER)[0]
-    mafia_names = {p.name for p in by_role(game, Role.MAFIA)}
-    view = game.view_for(gf.id)
-    assert set(view["known_mafia"]) == mafia_names
+    h1, h2 = by_role(game, Role.HAND)
+    view = game.view_for(h1.id)
+    assert view["allies"] == [h2.name]
 
 
 def test_full_headless_12_player_game_runs_to_completion():
     game = make_game(
         names=[f"P{i}" for i in range(12)],
-        role_counts={Role.MAFIA: 3, Role.GODFATHER: 1, Role.DETECTIVE: 1, Role.DOCTOR: 1},
+        role_counts={Role.HAND: 3, Role.INSPECTOR: 1, Role.WATCHMAN: 1},
     )
     game.start_game()
     rounds = 0
     while game.phase != Phase.GAME_OVER and rounds < 50:
         rounds += 1
-        mafia_alive = [p for p in game.alive_players() if p.role is Role.MAFIA]
-        if mafia_alive:
-            victim = next((p for p in game.alive_players() if role_team_is_town(p)), None)
+        hand_alive = [p for p in game.alive_players() if p.role is Role.HAND]
+        if hand_alive:
+            victim = next((p for p in game.alive_players() if role_faction_is_table(p)), None)
             if victim:
-                game.submit_night_action(mafia_alive[0].id, ActionType.KILL, victim.id)
+                game.submit_night_action(hand_alive[0].id, ActionType.KILL, victim.id)
         game.resolve_night()
         if game.phase == Phase.GAME_OVER:
             break
@@ -237,27 +196,27 @@ def test_full_headless_12_player_game_runs_to_completion():
                 game.submit_vote(voter.id, target.id)
         game.resolve_lynch()
     assert game.phase == Phase.GAME_OVER
-    assert game.winner in (Team.TOWN, Team.MAFIA)
+    assert game.winner in (Faction.TABLE, Faction.HAND)
 
 
 def test_dead_player_sees_round_log_but_alive_player_does_not():
-    game = make_game(role_counts={Role.MAFIA: 1})
+    game = make_game(role_counts={Role.HAND: 1})
     game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    victim = next(p for p in game.players if p.role is not Role.MAFIA)
-    game.submit_night_action(mafia.id, ActionType.KILL, victim.id)
+    hand = by_role(game, Role.HAND)[0]
+    victim = next(p for p in game.players if p.role is not Role.HAND)
+    game.submit_night_action(hand.id, ActionType.KILL, victim.id)
     game.resolve_night()
 
     dead_view = game.view_for(victim.id)
     assert "round_log" in dead_view
 
-    alive_id = next(p.id for p in game.alive_players() if p.id != mafia.id)
+    alive_id = next(p.id for p in game.alive_players() if p.id != hand.id)
     alive_view = game.view_for(alive_id)
     assert "round_log" not in alive_view
 
 
 def test_votes_complete_once_every_alive_player_has_voted():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.MAFIA: 1})
+    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
     game.start_game()
     game.resolve_night()
     game.begin_voting()
@@ -272,7 +231,7 @@ def test_votes_complete_once_every_alive_player_has_voted():
 
 
 def test_skip_vote_does_not_count_toward_lynch_tally():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.MAFIA: 1})
+    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
     game.start_game()
     game.resolve_night()
     game.begin_voting()
@@ -286,10 +245,10 @@ def test_skip_vote_does_not_count_toward_lynch_tally():
 
 
 def test_votes_complete_ignores_dead_players():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.MAFIA: 1})
+    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
     game.start_game()
-    # Kill a non-Mafia player so the game doesn't end before reaching voting.
-    dead = next(p for p in game.players if p.role is not Role.MAFIA)
+    # Kill a non-Hand player so the game doesn't end before reaching voting.
+    dead = next(p for p in game.players if p.role is not Role.HAND)
     dead.alive = False
     game.resolve_night()
     game.begin_voting()
@@ -306,17 +265,17 @@ def test_handle_disconnect_removal_in_lobby_drops_player_outright():
 
 
 def test_handle_disconnect_removal_mid_game_marks_eliminated_not_removed():
-    game = make_game(names=["A", "B", "C", "D", "E"], role_counts={Role.MAFIA: 1})
+    game = make_game(names=["A", "B", "C", "D", "E"], role_counts={Role.HAND: 1})
     game.start_game()
-    victim = next(p for p in game.players if p.role is not Role.MAFIA)
+    victim = next(p for p in game.players if p.role is not Role.HAND)
     game.handle_disconnect_removal(victim.id)
     assert victim in game.players  # still in the roster
     assert not victim.alive
-    assert game.phase != Phase.GAME_OVER  # 1 mafia vs 3 town remaining, not parity yet
+    assert game.phase != Phase.GAME_OVER  # 1 hand vs 3 table remaining, not parity yet
 
 
 def test_handle_disconnect_removal_clears_their_pending_vote():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.MAFIA: 1})
+    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
     game.start_game()
     game.resolve_night()
     game.begin_voting()
@@ -328,19 +287,19 @@ def test_handle_disconnect_removal_clears_their_pending_vote():
 
 
 def test_handle_disconnect_removal_can_end_the_game():
-    game = make_game(names=["A", "B", "C"], role_counts={Role.MAFIA: 1})
+    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
     game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    game.handle_disconnect_removal(mafia.id)
+    hand = by_role(game, Role.HAND)[0]
+    game.handle_disconnect_removal(hand.id)
     assert game.phase == Phase.GAME_OVER
-    assert game.winner == Team.TOWN
+    assert game.winner == Faction.TABLE
 
 
 def test_return_to_lobby_resets_game_for_a_rematch():
-    game = make_game(names=["A", "B", "C"], role_counts={Role.MAFIA: 1})
+    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
     game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    mafia.alive = False
+    hand = by_role(game, Role.HAND)[0]
+    hand.alive = False
     game.resolve_night()
     assert game.phase == Phase.GAME_OVER
 
@@ -350,42 +309,38 @@ def test_return_to_lobby_resets_game_for_a_rematch():
     assert game.round_log == []
     assert all(p.role is None and p.alive for p in game.players)
     # can configure and start a fresh game afterwards
-    game.config = GameConfig(role_counts={Role.MAFIA: 1})
+    game.config = GameConfig(role_counts={Role.HAND: 1})
     game.start_game()
     assert game.phase == Phase.NIGHT
 
 
 def test_return_to_lobby_rejected_mid_game():
-    game = make_game(role_counts={Role.MAFIA: 1})
+    game = make_game(role_counts={Role.HAND: 1})
     game.start_game()
     with pytest.raises(Exception):
         game.return_to_lobby()
 
 
 def test_remove_player_allowed_after_game_over():
-    game = make_game(names=["A", "B", "C"], role_counts={Role.MAFIA: 1})
+    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
     game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    mafia.alive = False
+    hand = by_role(game, Role.HAND)[0]
+    hand.alive = False
     game.resolve_night()
     assert game.phase == Phase.GAME_OVER
     game.remove_player(game.players[0].id)
     assert len(game.players) == 2
 
 
-def test_game_over_reveals_mafia_to_everyone():
-    game = make_game(names=["A", "B", "C"], role_counts={Role.MAFIA: 1})
+def test_game_over_reveals_hand_to_everyone():
+    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
     game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    mafia.alive = False
+    hand = by_role(game, Role.HAND)[0]
+    hand.alive = False
     game.resolve_night()
     assert game.phase == Phase.GAME_OVER
     view = game.view_for(game.players[0].id)
-    assert view["mafia_reveal"] == [mafia.name]
-
-
-def role_team_is_town(player):
-    return player.role in (Role.VILLAGER, Role.DETECTIVE, Role.DOCTOR)
+    assert view["hand_reveal"] == [hand.name]
 
 
 def test_remove_player_in_lobby():
@@ -395,24 +350,24 @@ def test_remove_player_in_lobby():
 
 
 def test_remove_player_after_start_is_rejected():
-    game = make_game(role_counts={Role.MAFIA: 1})
+    game = make_game(role_counts={Role.HAND: 1})
     game.start_game()
     with pytest.raises(Exception):
         game.remove_player(game.players[0].id)
 
 
-def test_mafia_kill_is_a_single_shared_target():
-    game = make_game(names=[f"P{i}" for i in range(6)], role_counts={Role.MAFIA: 2})
+def test_hand_kill_is_a_single_shared_target():
+    game = make_game(names=[f"P{i}" for i in range(6)], role_counts={Role.HAND: 2})
     game.start_game()
-    m1, m2 = by_role(game, Role.MAFIA)
-    victims = [p for p in game.players if p.role is not Role.MAFIA]
+    h1, h2 = by_role(game, Role.HAND)
+    victims = [p for p in game.players if p.role is not Role.HAND]
 
-    game.submit_night_action(m1.id, ActionType.KILL, victims[0].id)
-    assert game.mafia_kill_target == victims[0].id
-    assert game.night_actions_ready()  # one mafia member is enough
+    game.submit_night_action(h1.id, ActionType.KILL, victims[0].id)
+    assert game.hand_kill_target == victims[0].id
+    assert game.night_actions_ready()  # one Hand member is enough
 
-    game.submit_night_action(m2.id, ActionType.KILL, victims[1].id)
-    assert game.mafia_kill_target == victims[1].id  # second member overwrites the shared choice
+    game.submit_night_action(h2.id, ActionType.KILL, victims[1].id)
+    assert game.hand_kill_target == victims[1].id  # second member overwrites the shared choice
 
     game.resolve_night()
     assert not victims[1].alive
@@ -420,11 +375,11 @@ def test_mafia_kill_is_a_single_shared_target():
 
 
 def test_round_log_records_night_and_lynch_detail():
-    game = make_game(role_counts={Role.MAFIA: 1, Role.DOCTOR: 1})
+    game = make_game(role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
     game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    victim = next(p for p in game.players if p.role is not Role.MAFIA)
-    game.submit_night_action(mafia.id, ActionType.KILL, victim.id)
+    hand = by_role(game, Role.HAND)[0]
+    victim = next(p for p in game.players if p.role is not Role.HAND)
+    game.submit_night_action(hand.id, ActionType.KILL, victim.id)
     game.resolve_night()
     assert game.round_log[-1]["title"] == "Night 1"
     assert any(victim.name in line for line in game.round_log[-1]["lines"])
@@ -438,17 +393,17 @@ def test_round_log_records_night_and_lynch_detail():
 
 
 def test_night_actions_ready_tracks_required_actors():
-    game = make_game(role_counts={Role.MAFIA: 1, Role.DOCTOR: 1, Role.DETECTIVE: 1})
+    game = make_game(role_counts={Role.HAND: 1, Role.WATCHMAN: 1, Role.INSPECTOR: 1})
     game.start_game()
-    mafia = by_role(game, Role.MAFIA)[0]
-    doctor = by_role(game, Role.DOCTOR)[0]
-    detective = by_role(game, Role.DETECTIVE)[0]
-    villager = by_role(game, Role.VILLAGER)[0]
+    hand = by_role(game, Role.HAND)[0]
+    watchman = by_role(game, Role.WATCHMAN)[0]
+    inspector = by_role(game, Role.INSPECTOR)[0]
+    civilian = by_role(game, Role.CIVILIAN)[0]
 
     assert not game.night_actions_ready()
-    game.submit_night_action(mafia.id, ActionType.KILL, villager.id)
+    game.submit_night_action(hand.id, ActionType.KILL, civilian.id)
     assert not game.night_actions_ready()
-    game.submit_night_action(doctor.id, ActionType.PROTECT, villager.id)
+    game.submit_night_action(watchman.id, ActionType.PROTECT, civilian.id)
     assert not game.night_actions_ready()
-    game.submit_night_action(detective.id, ActionType.INVESTIGATE, villager.id)
+    game.submit_night_action(inspector.id, ActionType.INVESTIGATE, civilian.id)
     assert game.night_actions_ready()

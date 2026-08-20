@@ -69,9 +69,7 @@ class Room:
         self.host_id = self.game.players[0].id if self.game.players else None
 
     def mafia_channel_ids(self) -> set:
-        # mafia_team() reflects promotion automatically: once the engine
-        # promotes the Godfather to Role.MAFIA, he's included here too.
-        return {p.id for p in self.game.mafia_team()}
+        return {p.id for p in self.game.hand_team()}
 
 
 class RoomManager:
