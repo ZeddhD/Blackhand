@@ -6,8 +6,12 @@ from engine import SKIP_VOTE, ActionType, Faction, Game, GameConfig, Phase, Role
 
 
 def make_game(room_code="TEST", names=None, role_counts=None):
+    # Show Your Hands is disabled here so these pre-existing tests (mostly
+    # small player counts) aren't affected by an unrelated Phase 3
+    # mechanic. See tests/test_show_hands.py for that feature's own tests.
     names = names or [f"P{i}" for i in range(8)]
-    game = Game(room_code=room_code, config=GameConfig(role_counts=role_counts or {}))
+    config = GameConfig(role_counts=role_counts or {}, show_hands_enabled=False)
+    game = Game(room_code=room_code, config=config)
     for i, name in enumerate(names):
         game.add_player(str(i), name)
     return game
@@ -309,7 +313,7 @@ def test_return_to_lobby_resets_game_for_a_rematch():
     assert game.round_log == []
     assert all(p.role is None and p.alive for p in game.players)
     # can configure and start a fresh game afterwards
-    game.config = GameConfig(role_counts={Role.HAND: 1})
+    game.config = GameConfig(role_counts={Role.HAND: 1}, show_hands_enabled=False)
     game.start_game()
     assert game.phase == Phase.NIGHT
 

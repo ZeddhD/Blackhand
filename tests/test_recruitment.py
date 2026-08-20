@@ -7,8 +7,12 @@ from engine.game import NO_VISIBLE_DEATH_MESSAGE, IllegalActionError
 
 
 def make_game(room_code="TEST", names=None, role_counts=None):
+    # Show Your Hands is disabled here so these Recruitment tests (mostly
+    # small player counts) aren't affected by an unrelated Phase 3
+    # mechanic. See tests/test_show_hands.py for that feature's own tests.
     names = names or [f"P{i}" for i in range(8)]
-    game = Game(room_code=room_code, config=GameConfig(role_counts=role_counts or {}))
+    config = GameConfig(role_counts=role_counts or {}, show_hands_enabled=False)
+    game = Game(room_code=room_code, config=config)
     for i, name in enumerate(names):
         game.add_player(str(i), name)
     return game

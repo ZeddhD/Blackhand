@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 2 complete. Phase 3 not started.**
+**Current status: Phase 3 complete. Phase 4 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -205,4 +205,88 @@ deferred and noted here so it isn't forgotten.
   frontend sends it, no server code change was needed for this phase).
   **Not pushed**, per the confirmed policy above.
 
-## Phases 3 through 15: not started
+## Phase 3: Engine, Show Your Hands (done)
+
+**Files touched:** `engine/game.py`, `engine/models.py`, `tests/test_show_hands.py`
+(new file, 16 tests). Also fixed `tests/test_engine.py` and
+`tests/test_recruitment.py`'s shared `make_game()` helpers to disable Show
+Your Hands by default, since the default threshold (6) meant most of
+those pre-existing tests' small player counts would otherwise trigger it
+unexpectedly and break assumptions written before this phase existed.
+
+**New engine state:** `Phase.SHOW_HANDS` (the vocabulary table names this
+one explicitly, unlike Offer). A new `_begin_round()` method is now the
+real entry point for starting a round, called everywhere `_begin_night()`
+used to be called directly (`start_game()`, `resolve_lynch()`). It checks
+`_show_hands_eligible()` (enabled, occurrence count under 3, living
+players at or below the configured threshold) and opens `Phase.SHOW_HANDS`
+instead of Night when eligible. Resolving it with a HOLD majority or a tie
+calls `_begin_night()` directly, not `_begin_round()` again, so eligibility
+isn't re-checked mid-transition the same round.
+
+**A real bug in Phase 2's work was caught and fixed while building this
+phase.** Several places still checked literal `actor.role != Role.HAND`
+instead of `effective_faction(actor) != Faction.HAND`: `hand_ready()`, the
+`KILL`/`OFFER` eligibility checks in `submit_night_action()`, and the
+`night_actions_total`/`done` progress calculation in `view_for()`. This
+meant a Marked player who had accepted an offer could not actually
+participate in choosing the next kill or offer target, directly
+contradicting section 2.3's "gains... the shared kill target." All four
+call sites now use `effective_faction`. Caught by re-reading Phase 2's own
+code while wiring Show Your Hands into the same win-check paths, not by a
+failing test, worth being more careful about going forward: **any new
+literal `p.role is Role.HAND` check anywhere in the engine should be
+treated as a probable bug** unless it's specifically about original role
+assignment (like `GameConfig.hand_count()`, which is correctly role-based
+since it describes the lobby's role configuration, not runtime status).
+
+**Decisions made, not fully specified in the document:**
+- **Show Your Hands can end early once everyone's voted**, same
+  early-completion pattern as Night and day Voting
+  (`show_hands_votes_complete()`). The document only states a flat 15
+  second duration for this beat; extending the established pattern here
+  was a judgment call, not an explicit instruction, flagged in case it's
+  wrong.
+- **Non-voters simply don't count toward the tally** (majority is of votes
+  actually cast, not of all living players), consistent with how the day
+  lynch tally already treats skipped/missing votes. No death penalty for
+  not voting, unlike the Offer.
+- **Individual votes are never exposed to anyone but the voter themselves**,
+  not even after resolution; only the final aggregate counts become a
+  public event (`"Show Your Hands: 4 HOLD, 2 CALL IT"`) and round log
+  entry. Verified by `test_results_expose_counts_only_never_names` and
+  `test_own_vote_is_visible_only_to_self`.
+- **A successful CALL IT bypasses the normal parity win check entirely**:
+  it's a direct binary read (any Hand alive at all means Black Hand wins,
+  regardless of how lopsided the numbers are), not the usual `hand_count
+  >= table_count` math. Verified by
+  `test_black_hand_wins_even_at_bad_parity_once_called`.
+
+**Acceptance criteria, all verified:**
+- Only available at or below the configured threshold, and the threshold
+  is itself configurable (`show_hands_threshold`)
+- Majority CALL IT ends the game
+- All Hands dead + CALL IT means Table wins; any Hand alive + CALL IT
+  means Black Hand wins, confirmed even at parity that would never
+  normally trigger a win
+- Maximum 3 occurrences per game enforced (tested with a 3-player game
+  where every round is eligible, confirming the 4th round is skipped)
+- Results expose counts only through `view_for`, never names or a
+  per-player breakdown
+
+**Deliberately not done in Phase 3:**
+- The private Black Hand channel is not yet gated off during Show Your
+  Hands ("Hands vote individually and are forbidden from coordinating this
+  vote in their private channel. Enforce it in the interface: the channel
+  is disabled during Show Your Hands"). The engine phase value
+  (`Phase.SHOW_HANDS`) is directly inspectable and sufficient for the
+  server layer to enforce this, but the actual gating is server work
+  (`server/rooms.py`'s `mafia_channel_ids`/chat broadcast), which is Phase
+  5. Noting this explicitly so it isn't forgotten when Phase 5 starts.
+- No lobby-facing threshold validation range (5-7 per section 7.1) is
+  enforced yet; `show_hands_threshold` currently accepts any integer. Left
+  for whichever phase actually builds lobby input validation.
+- `server/`, `frontend/` untouched. **Not pushed**, per the confirmed
+  policy.
+
+## Phases 4 through 15: not started

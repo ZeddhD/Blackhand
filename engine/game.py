@@ -48,6 +48,11 @@ SKIP_VOTE = "skip"
 # section 2.3. Do not let any of them use a different string.
 NO_VISIBLE_DEATH_MESSAGE = "Nobody was killed last night."
 
+# Show Your Hands choices. Not real player ids, just sentinel values.
+HOLD_VOTE = "hold"
+CALL_IT_VOTE = "call_it"
+MAX_SHOW_HANDS_OCCURRENCES = 3
+
 
 @dataclass
 class Game:
@@ -70,6 +75,9 @@ class Game:
     hand_target_actor_id: Optional[str] = None
     recruitment_used: bool = False  # the Black Hand gets at most one offer per game, ever
     _offer_recipient_id: Optional[str] = None
+
+    show_hands_votes: Dict[str, str] = field(default_factory=dict)
+    show_hands_count: int = 0
 
     _watchman_self_heal_used: bool = False
     _watchman_last_target: Optional[str] = None
@@ -129,6 +137,8 @@ class Game:
         self.hand_target_actor_id = None
         self.recruitment_used = False
         self._offer_recipient_id = None
+        self.show_hands_votes.clear()
+        self.show_hands_count = 0
         self._watchman_self_heal_used = False
         self._watchman_last_target = None
         for p in self.players:
@@ -160,6 +170,67 @@ class Game:
         roles = self.config.build_role_list(len(self.players))
         for player, role in zip(self.players, roles):
             player.role = role
+        self._begin_round()
+
+    # -- round start / Show Your Hands ---------------------------------------
+
+    def _show_hands_eligible(self) -> bool:
+        return (
+            self.config.show_hands_enabled
+            and self.show_hands_count < MAX_SHOW_HANDS_OCCURRENCES
+            and len(self.alive_players()) <= self.config.show_hands_threshold
+        )
+
+    def _begin_round(self) -> None:
+        """Called at the start of every round, before the Dark. Opens Show
+        Your Hands instead of Night if the room is small enough and it
+        hasn't already fired three times this game (section 2.4)."""
+        if self._show_hands_eligible():
+            self.show_hands_count += 1
+            self.show_hands_votes.clear()
+            self.phase = Phase.SHOW_HANDS
+            return
+        self._begin_night()
+
+    def submit_show_hands_vote(self, player_id: str, choice: str) -> None:
+        if self.phase != Phase.SHOW_HANDS:
+            raise IllegalActionError("Not in Show Your Hands")
+        player = self.player(player_id)
+        if not player.alive:
+            raise IllegalActionError("Dead players cannot vote")
+        if choice not in (HOLD_VOTE, CALL_IT_VOTE):
+            raise IllegalActionError("Invalid Show Your Hands choice")
+        self.show_hands_votes[player_id] = choice
+
+    def show_hands_votes_complete(self) -> bool:
+        return {p.id for p in self.alive_players()} <= set(self.show_hands_votes.keys())
+
+    def resolve_show_hands(self) -> None:
+        """Majority CALL IT ends the game immediately: the Table wins if
+        every Hand is already dead, otherwise the Black Hand wins outright
+        -- this bypasses the normal parity win check entirely. A tie or a
+        HOLD majority just proceeds into the Dark. Results are counts
+        only, never names (section 2.4)."""
+        if self.phase != Phase.SHOW_HANDS:
+            raise IllegalActionError("Not in Show Your Hands")
+
+        hold = sum(1 for v in self.show_hands_votes.values() if v == HOLD_VOTE)
+        call_it = sum(1 for v in self.show_hands_votes.values() if v == CALL_IT_VOTE)
+        self.events.append(f"Show Your Hands: {hold} HOLD, {call_it} CALL IT")
+        self.round_log.append(
+            {
+                "title": "Show Your Hands",
+                "lines": [f"{hold} players chose HOLD, {call_it} chose CALL IT."],
+            }
+        )
+
+        if call_it > hold:
+            hand_alive = [p for p in self.alive_players() if effective_faction(p) == Faction.HAND]
+            self.winner = Faction.TABLE if not hand_alive else Faction.HAND
+            self.phase = Phase.GAME_OVER
+            self.events.append("The Table wins!" if self.winner == Faction.TABLE else "The Black Hand wins!")
+            return
+
         self._begin_night()
 
     # -- night -------------------------------------------------------------
@@ -183,7 +254,7 @@ class Game:
         return {p.id for p in self.alive_players() if p.role in self.INDIVIDUAL_NIGHT_ACTION_ROLES}
 
     def hand_ready(self) -> bool:
-        hand_alive = [p for p in self.alive_players() if p.role is Role.HAND]
+        hand_alive = [p for p in self.alive_players() if effective_faction(p) == Faction.HAND]
         return not hand_alive or self.hand_target_id is not None
 
     def night_actions_ready(self) -> bool:
@@ -207,14 +278,15 @@ class Game:
             if target.id == self._watchman_last_target:
                 raise IllegalActionError("The Watchman cannot protect the same person two nights in a row")
         elif action_type == ActionType.KILL:
-            if actor.role != Role.HAND:
+            if effective_faction(actor) != Faction.HAND:
                 raise IllegalActionError("Only the Black Hand can submit a kill")
-            # Shared team choice: any living Hand can set or change it.
+            # Shared team choice: any living Hand (including a Marked
+            # recruit) can set or change it.
             self.hand_action_mode = "kill"
             self.hand_target_id = target_id
             self.hand_target_actor_id = actor_id
         elif action_type == ActionType.OFFER:
-            if actor.role != Role.HAND:
+            if effective_faction(actor) != Faction.HAND:
                 raise IllegalActionError("Only the Black Hand can make an offer")
             if self.recruitment_used:
                 raise IllegalActionError("The Black Hand has already made its one offer this game")
@@ -388,7 +460,7 @@ class Game:
 
         if self._check_win():
             return
-        self._begin_night()
+        self._begin_round()
 
     # -- win -----------------------------------------------------------------
 
@@ -435,13 +507,20 @@ class Game:
             base["recruitment_used"] = self.recruitment_used
         if self.phase == Phase.NIGHT:
             required = self.required_night_actor_ids()
-            hand_alive_exists = any(p.role is Role.HAND for p in self.alive_players())
+            hand_alive_exists = any(effective_faction(p) == Faction.HAND for p in self.alive_players())
             base["night_actions_total"] = len(required) + (1 if hand_alive_exists else 0)
             base["night_actions_done"] = len(required & set(self.pending_actions.keys())) + (
                 1 if hand_alive_exists and self.hand_target_id else 0
             )
         if self.phase == Phase.OFFER and player_id == self._offer_recipient_id:
             base["offer_pending"] = True
+        if self.phase == Phase.SHOW_HANDS:
+            # Private ballot: each player only ever learns their own choice.
+            # Final results are counts only, published as a public event
+            # once resolve_show_hands runs -- never a per-player breakdown.
+            base["show_hands_total"] = len(self.alive_players())
+            base["show_hands_done"] = len(self.show_hands_votes)
+            base["show_hands_your_vote"] = self.show_hands_votes.get(player_id)
         if self.phase == Phase.VOTING:
             base["votes_total"] = len(self.alive_players())
             base["votes_done"] = len(self.votes)
