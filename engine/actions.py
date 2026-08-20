@@ -6,9 +6,9 @@ from typing import Optional
 
 
 class ActionType(Enum):
-    PROTECT = "protect"       # Doctor
-    KILL = "kill"              # Mafia
-    INVESTIGATE = "investigate"  # Detective
+    PROTECT = "protect"          # Watchman
+    KILL = "kill"                 # Black Hand
+    INVESTIGATE = "investigate"   # Inspector
 
 
 @dataclass

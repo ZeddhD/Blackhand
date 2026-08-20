@@ -1,21 +1,17 @@
 """Pure Python game engine. Zero web framework imports -- fully testable headless.
 
-Decided ambiguities (spec section 6) -- see README.md for rationale:
-  - Doctor (Healer) CAN self-heal, but only once per game.
-  - Doctor cannot target the same player on consecutive nights.
-  - A roleblocked Detective (Police) gets an explicit "blocked" result
-    (reserved for future Roleblocker roles; v1 has none, so this never
-    fires yet).
-  - The Detective sees the true role of a target who died earlier the same
-    night (kills resolve before investigations, but role data never changes).
-  - Godfather succession is checked immediately after night resolution AND
-    after lynch resolution, so whichever kill happens "last" in the actual
-    phase sequence is authoritative -- there is no true simultaneity to
-    arbitrate since night and day are always separate phases.
-  - The Mafia's kill is a single shared choice: any living Mafia member can
-    set or change it, and it is visible live to the whole Mafia team. There
-    is no way for two Mafia members to target two different people at once,
-    so there is nothing to tie-break. Tied lynch votes -> no lynch.
+Decided ambiguities -- see README.md for rationale:
+  - Watchman CAN self-heal, but only once per game.
+  - Watchman cannot target the same player on consecutive nights.
+  - A roleblocked Inspector gets an explicit "blocked" result (reserved for
+    a future Roleblocker role; v1 has none, so this never fires yet).
+  - The Inspector sees the true faction of a target who died earlier the
+    same night (kills resolve before investigations, but faction data
+    never changes on death).
+  - The Black Hand's kill is a single shared choice: any living Hand can
+    set or change it, and it is visible live to the whole Black Hand. There
+    is no way for two Hands to target two different people at once, so
+    there is nothing to tie-break. Tied lynch votes -> no lynch.
 """
 from __future__ import annotations
 
@@ -24,14 +20,14 @@ from typing import Dict, List, Optional
 
 from .actions import ActionType, NightAction
 from .models import (
+    Faction,
     GameConfig,
     InvestigationResult,
     Phase,
     Player,
     Role,
-    Team,
-    detective_reads_as,
-    role_team,
+    faction_of,
+    inspector_reads_as,
 )
 
 
@@ -51,7 +47,7 @@ class Game:
     players: List[Player] = field(default_factory=list)
     phase: Phase = Phase.LOBBY
     night_number: int = 0
-    winner: Optional[Team] = None
+    winner: Optional[Faction] = None
 
     pending_actions: Dict[str, NightAction] = field(default_factory=dict)
     votes: Dict[str, str] = field(default_factory=dict)
@@ -60,11 +56,11 @@ class Game:
     private_log: Dict[str, List[str]] = field(default_factory=dict)  # player_id -> messages
     round_log: List[dict] = field(default_factory=list)  # full detail, revealed to dead players and post-game
 
-    mafia_kill_target: Optional[str] = None
-    mafia_kill_actor: Optional[str] = None
+    hand_kill_target: Optional[str] = None
+    hand_kill_actor: Optional[str] = None
 
-    _doctor_self_heal_used: bool = False
-    _doctor_last_target: Optional[str] = None
+    _watchman_self_heal_used: bool = False
+    _watchman_last_target: Optional[str] = None
 
     # -- setup -----------------------------------------------------------
 
@@ -101,7 +97,6 @@ class Game:
         self.votes.pop(player_id, None)
         self.pending_actions.pop(player_id, None)
         self.events.append(f"{player.name} disconnected and was removed from the game.")
-        self._check_succession()
         self._check_win()
 
     def return_to_lobby(self) -> None:
@@ -117,10 +112,10 @@ class Game:
         self.events.clear()
         self.private_log.clear()
         self.round_log.clear()
-        self.mafia_kill_target = None
-        self.mafia_kill_actor = None
-        self._doctor_self_heal_used = False
-        self._doctor_last_target = None
+        self.hand_kill_target = None
+        self.hand_kill_actor = None
+        self._watchman_self_heal_used = False
+        self._watchman_last_target = None
         for p in self.players:
             p.role = None
             p.alive = True
@@ -134,10 +129,9 @@ class Game:
     def alive_players(self) -> List[Player]:
         return [p for p in self.players if p.alive]
 
-    def mafia_team(self) -> List[Player]:
-        """Players the Mafia chat/kill together with -- excludes the Godfather,
-        who the spec requires stay hidden from the regular Mafia (section 4)."""
-        return [p for p in self.players if p.role in (Role.MAFIA,)]
+    def hand_team(self) -> List[Player]:
+        """Players who chat and kill together as the Black Hand."""
+        return [p for p in self.players if p.role is Role.HAND]
 
     def start_game(self) -> None:
         if self.phase != Phase.LOBBY:
@@ -158,23 +152,23 @@ class Game:
         self.night_number += 1
         self.pending_actions.clear()
         self.private_log.clear()
-        self.mafia_kill_target = None
-        self.mafia_kill_actor = None
+        self.hand_kill_target = None
+        self.hand_kill_actor = None
 
-    INDIVIDUAL_NIGHT_ACTION_ROLES = (Role.DOCTOR, Role.DETECTIVE)
+    INDIVIDUAL_NIGHT_ACTION_ROLES = (Role.WATCHMAN, Role.INSPECTOR)
 
     def required_night_actor_ids(self) -> set:
-        """Living players who each individually owe a night action (Healer,
-        Police). The Mafia's kill is a single shared team choice, tracked
-        separately -- see mafia_ready()."""
+        """Living players who each individually owe a night action (Watchman,
+        Inspector). The Black Hand's kill is a single shared team choice,
+        tracked separately -- see hand_ready()."""
         return {p.id for p in self.alive_players() if p.role in self.INDIVIDUAL_NIGHT_ACTION_ROLES}
 
-    def mafia_ready(self) -> bool:
-        mafia_alive = [p for p in self.alive_players() if p.role is Role.MAFIA]
-        return not mafia_alive or self.mafia_kill_target is not None
+    def hand_ready(self) -> bool:
+        hand_alive = [p for p in self.alive_players() if p.role is Role.HAND]
+        return not hand_alive or self.hand_kill_target is not None
 
     def night_actions_ready(self) -> bool:
-        return self.mafia_ready() and self.required_night_actor_ids() <= set(self.pending_actions.keys())
+        return self.hand_ready() and self.required_night_actor_ids() <= set(self.pending_actions.keys())
 
     def submit_night_action(self, actor_id: str, action_type: ActionType, target_id: str) -> None:
         if self.phase != Phase.NIGHT:
@@ -187,21 +181,21 @@ class Game:
             raise IllegalActionError("Cannot target a dead player")
 
         if action_type == ActionType.PROTECT:
-            if actor.role != Role.DOCTOR:
-                raise IllegalActionError("Only the Healer can protect")
-            if target.id == actor.id and self._doctor_self_heal_used:
-                raise IllegalActionError("The Healer has already used their one self-heal")
-            if target.id == self._doctor_last_target:
-                raise IllegalActionError("The Healer cannot protect the same person two nights in a row")
+            if actor.role != Role.WATCHMAN:
+                raise IllegalActionError("Only the Watchman can protect")
+            if target.id == actor.id and self._watchman_self_heal_used:
+                raise IllegalActionError("The Watchman has already used their one self-heal")
+            if target.id == self._watchman_last_target:
+                raise IllegalActionError("The Watchman cannot protect the same person two nights in a row")
         elif action_type == ActionType.KILL:
-            if role_team(actor.role) != Team.MAFIA or actor.role == Role.GODFATHER:
-                raise IllegalActionError("Only Mafia can submit a kill")
-            # Shared team choice: any living Mafia member can set or change it.
-            self.mafia_kill_target = target_id
-            self.mafia_kill_actor = actor_id
+            if actor.role != Role.HAND:
+                raise IllegalActionError("Only the Black Hand can submit a kill")
+            # Shared team choice: any living Hand can set or change it.
+            self.hand_kill_target = target_id
+            self.hand_kill_actor = actor_id
         elif action_type == ActionType.INVESTIGATE:
-            if actor.role != Role.DETECTIVE:
-                raise IllegalActionError("Only the Police can investigate")
+            if actor.role != Role.INSPECTOR:
+                raise IllegalActionError("Only the Inspector can investigate")
 
         self.pending_actions[actor_id] = NightAction(actor_id, action_type, target_id)
 
@@ -217,52 +211,49 @@ class Game:
         protected_ids = {
             a.target_id for a in self.pending_actions.values() if a.action_type == ActionType.PROTECT
         }
-        doctor_action = next(
+        watchman_action = next(
             (a for a in self.pending_actions.values() if a.action_type == ActionType.PROTECT), None
         )
-        if doctor_action:
-            if doctor_action.target_id == doctor_action.actor_id:
-                self._doctor_self_heal_used = True
-            self._doctor_last_target = doctor_action.target_id
-            healer = self.player(doctor_action.actor_id)
-            target = self.player(doctor_action.target_id)
-            lines.append(f"{healer.name} the Healer protected {target.name}.")
+        if watchman_action:
+            if watchman_action.target_id == watchman_action.actor_id:
+                self._watchman_self_heal_used = True
+            self._watchman_last_target = watchman_action.target_id
+            watchman = self.player(watchman_action.actor_id)
+            target = self.player(watchman_action.target_id)
+            lines.append(f"{watchman.name} the Watchman protected {target.name}.")
         else:
-            self._doctor_last_target = None
+            self._watchman_last_target = None
 
-        # 3. Kills (single shared Mafia choice)
-        if self.mafia_kill_target:
-            victim = self.player(self.mafia_kill_target)
-            chooser = self.player(self.mafia_kill_actor) if self.mafia_kill_actor else None
+        # 3. Kills (single shared Black Hand choice)
+        if self.hand_kill_target:
+            victim = self.player(self.hand_kill_target)
+            chooser = self.player(self.hand_kill_actor) if self.hand_kill_actor else None
             if chooser:
-                lines.append(f"{chooser.name} the Mafia chose to kill {victim.name}.")
+                lines.append(f"{chooser.name} the Black Hand chose to kill {victim.name}.")
             if victim.id in protected_ids:
-                self.events.append(f"The Healer saved {victim.name} last night.")
-                lines.append(f"{victim.name} was attacked but saved by the Healer.")
+                self.events.append(f"The Watchman saved {victim.name} last night.")
+                lines.append(f"{victim.name} was attacked but saved by the Watchman.")
             else:
                 victim.alive = False
                 self.events.append(f"{victim.name} was killed during the night.")
                 lines.append(f"{victim.name} was killed.")
         else:
             self.events.append("Nothing happened last night.")
-            lines.append("The Mafia did not choose a target.")
+            lines.append("The Black Hand did not choose a target.")
 
         # 4. Investigations
         for action in self.pending_actions.values():
             if action.action_type != ActionType.INVESTIGATE:
                 continue
-            police = self.player(action.actor_id)
+            inspector = self.player(action.actor_id)
             target = self.player(action.target_id)
-            result = detective_reads_as(target.role)
+            result = inspector_reads_as(target.role)
             self._log(action.actor_id, f"Investigation of {target.name}: {result.value.upper()}")
-            lines.append(f"{police.name} the Police investigated {target.name}: {result.value.upper()}.")
+            lines.append(f"{inspector.name} the Inspector investigated {target.name}: {result.value.upper()}.")
 
         # 5. Death triggers -- no v1 role has one; reserved stage.
 
-        # 6. Godfather succession check
-        promo = self._check_succession()
-        if promo:
-            lines.append(promo)
+        # 6. Win condition check happens below.
 
         self.round_log.append({"title": f"Night {self.night_number}", "lines": lines})
 
@@ -315,7 +306,7 @@ class Game:
                 victim = self.player(leaders[0])
                 victim.alive = False
                 self.events.append(f"{victim.name} was voted out.")
-                caught = " They were Mafia." if role_team(victim.role) == Team.MAFIA else " They were not Mafia."
+                caught = " They were a Hand." if faction_of(victim.role) == Faction.HAND else " They were not a Hand."
                 lines.append(f"{victim.name} was voted out ({top} votes).{caught}")
             else:
                 self.events.append("The vote was tied -- no one was voted out.")
@@ -326,40 +317,25 @@ class Game:
 
         # Death triggers -- reserved stage, no-op in v1.
 
-        promo = self._check_succession()
-        if promo:
-            lines.append(promo)
-
         self.round_log.append({"title": f"Day {self.night_number} Vote", "lines": lines})
 
         if self._check_win():
             return
         self._begin_night()
 
-    # -- win / succession -----------------------------------------------------
-
-    def _check_succession(self) -> Optional[str]:
-        mafia_alive = [p for p in self.alive_players() if p.role is Role.MAFIA]
-        gf = next((p for p in self.alive_players() if p.role is Role.GODFATHER), None)
-        if not mafia_alive and gf:
-            gf.role = Role.MAFIA
-            self._log(gf.id, "The family has fallen. You are now the Mafia.")
-            line = f"{gf.name} has stepped up to lead the Mafia."
-            self.events.append(line)
-            return line
-        return None
+    # -- win -----------------------------------------------------------------
 
     def _check_win(self) -> bool:
-        evil_alive = [p for p in self.alive_players() if role_team(p.role) == Team.MAFIA]
-        town_alive = [p for p in self.alive_players() if role_team(p.role) == Team.TOWN]
-        if not evil_alive:
-            self.winner = Team.TOWN
-        elif len(evil_alive) >= len(town_alive):
-            self.winner = Team.MAFIA
+        hand_alive = [p for p in self.alive_players() if faction_of(p.role) == Faction.HAND]
+        table_alive = [p for p in self.alive_players() if faction_of(p.role) == Faction.TABLE]
+        if not hand_alive:
+            self.winner = Faction.TABLE
+        elif len(hand_alive) >= len(table_alive):
+            self.winner = Faction.HAND
         else:
             return False
         self.phase = Phase.GAME_OVER
-        self.events.append("The Civilians win!" if self.winner == Team.TOWN else "The Mafia win!")
+        self.events.append("The Table wins!" if self.winner == Faction.TABLE else "The Black Hand wins!")
         return True
 
     def _log(self, player_id: str, message: str) -> None:
@@ -383,20 +359,18 @@ class Game:
             "private_log": list(self.private_log.get(player_id, [])),
             "winner": self.winner.value if self.winner else None,
         }
-        if me.role == Role.MAFIA:
-            base["allies"] = [p.name for p in self.mafia_team() if p.id != me.id]
-            base["mafia_kill_target_id"] = self.mafia_kill_target
-            base["mafia_kill_target_name"] = (
-                self.player(self.mafia_kill_target).name if self.mafia_kill_target else None
+        if me.role == Role.HAND:
+            base["allies"] = [p.name for p in self.hand_team() if p.id != me.id]
+            base["hand_kill_target_id"] = self.hand_kill_target
+            base["hand_kill_target_name"] = (
+                self.player(self.hand_kill_target).name if self.hand_kill_target else None
             )
-        if me.role == Role.GODFATHER:
-            base["known_mafia"] = [p.name for p in self.mafia_team()]
         if self.phase == Phase.NIGHT:
             required = self.required_night_actor_ids()
-            mafia_alive_exists = any(p.role is Role.MAFIA for p in self.alive_players())
-            base["night_actions_total"] = len(required) + (1 if mafia_alive_exists else 0)
+            hand_alive_exists = any(p.role is Role.HAND for p in self.alive_players())
+            base["night_actions_total"] = len(required) + (1 if hand_alive_exists else 0)
             base["night_actions_done"] = len(required & set(self.pending_actions.keys())) + (
-                1 if mafia_alive_exists and self.mafia_kill_target else 0
+                1 if hand_alive_exists and self.hand_kill_target else 0
             )
         if self.phase == Phase.VOTING:
             base["votes_total"] = len(self.alive_players())
@@ -404,5 +378,5 @@ class Game:
         if not me.alive or self.phase == Phase.GAME_OVER:
             base["round_log"] = list(self.round_log)
         if self.phase == Phase.GAME_OVER:
-            base["mafia_reveal"] = [p.name for p in self.players if role_team(p.role) == Team.MAFIA]
+            base["hand_reveal"] = [p.name for p in self.players if faction_of(p.role) == Faction.HAND]
         return base
