@@ -363,11 +363,11 @@ def test_hand_kill_is_a_single_shared_target():
     victims = [p for p in game.players if p.role is not Role.HAND]
 
     game.submit_night_action(h1.id, ActionType.KILL, victims[0].id)
-    assert game.hand_kill_target == victims[0].id
+    assert game.hand_target_id == victims[0].id
     assert game.night_actions_ready()  # one Hand member is enough
 
     game.submit_night_action(h2.id, ActionType.KILL, victims[1].id)
-    assert game.hand_kill_target == victims[1].id  # second member overwrites the shared choice
+    assert game.hand_target_id == victims[1].id  # second member overwrites the shared choice
 
     game.resolve_night()
     assert not victims[1].alive
