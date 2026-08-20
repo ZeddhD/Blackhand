@@ -7,6 +7,17 @@ re-deriving state or silently disagreeing with an earlier decision.
 
 **Current status: Phase 1 complete. Phase 2 not started.**
 
+**Push policy, confirmed by the user: commit locally after every phase,
+but do not `git push` at all until the frontend is far enough along that
+the live deployed site works end to end again.** The engine and server
+vocabulary migration in Phase 1 already broke the live site's ability to
+start a game (the deployed frontend still sends old role names like
+`mafia`/`godfather`, which no longer match anything). Pushing mid-migration
+would just put that broken state on the public URL. Hold every push,
+across every phase, until a frontend phase (6+) restores a working
+end-to-end flow. Only push once that's true, and confirm with the user
+first regardless.
+
 ---
 
 ## Phase 0: Audit (done)
