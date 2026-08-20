@@ -36,6 +36,7 @@ class InvestigationResult(Enum):
 class Phase(Enum):
     LOBBY = "lobby"
     ASSIGN_ROLES = "assign_roles"
+    SHOW_HANDS = "show_hands"
     NIGHT = "night"
     OFFER = "offer"
     RESOLVE_NIGHT = "resolve_night"
@@ -73,6 +74,8 @@ def inspector_reads_as(player: Player) -> InvestigationResult:
 @dataclass
 class GameConfig:
     role_counts: Dict[Role, int] = field(default_factory=dict)
+    show_hands_enabled: bool = True
+    show_hands_threshold: int = 6  # Show Your Hands becomes available at or below this many living players
 
     def hand_count(self) -> int:
         return sum(count for role, count in self.role_counts.items() if role in HAND_ROLES)
