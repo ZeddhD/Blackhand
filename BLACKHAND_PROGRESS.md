@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 3 complete. Phase 4 not started.**
+**Current status: Phase 4 complete. Phase 5 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -289,4 +289,76 @@ since it describes the lobby's role configuration, not runtime status).
 - `server/`, `frontend/` untouched. **Not pushed**, per the confirmed
   policy.
 
-## Phases 4 through 15: not started
+## Phase 4: Engine, Ledger data (done)
+
+**Files touched:** `engine/game.py`, `tests/test_ledger.py` (new file, 13
+tests). No new module needed, the build plan didn't name one for this
+phase, so the Ledger lives as plain fields on `Game` (`vote_history`,
+`losing_side_counts`, `speaking_seconds`) plus a handful of methods, not a
+separate class.
+
+**A real gap was surfaced and resolved with the user before writing any
+code:** section 6.12 wants a "speaking time" accretion mark, but this
+project has zero Discord API integration and no microphone access
+anywhere, so there is currently no way to actually know who's talking.
+Confirmed approach: `record_speaking_time(player_id, seconds)` is a dumb
+accumulator with no opinion on where the seconds come from. The real
+measurement mechanism (browser mic detection, a push-to-talk button, or
+something else) is an explicit open decision for whichever phase actually
+builds live discussion UI (Phase 9, The Room). Noting it here again so it
+isn't lost.
+
+**Key design choices:**
+- **Every vote cast is appended to `vote_history` the moment
+  `submit_vote()` is called, not just the final vote per round.** A
+  changed vote produces a second history entry rather than overwriting
+  the first, matching "every vote every player casts is public and
+  permanent" literally rather than only keeping the vote that ended up
+  mattering. `self.votes` (the live tally dict) is unchanged and still
+  holds only the current/final choice per round, `vote_history` is the
+  permanent record layered on top.
+- **A Stand Aside (`SKIP_VOTE`) is recorded in history as `target_id:
+  None`**, distinct both from a real vote and from the raw `SKIP_VOTE`
+  sentinel string, so a Ledger consumer can't confuse "voted for a player
+  named None" with "chose not to vote."
+- **"Losing side of a lynch" is computed only when a lynch actually
+  resolves with a single clear leader.** Every living player whose final
+  vote that round was for someone other than the person actually lynched
+  gets a losing-side increment; a Stand Aside counts as no side at all,
+  not a loss. Ties and no-votes produce no losing-side records for that
+  round, since nothing was actually resolved to be wrong about.
+- **`votes_received(player_id)` is a plain filter over `vote_history`**,
+  not a separately stored/maintained data structure, since it's fully
+  derivable and keeping two copies in sync would just be a bug waiting to
+  happen.
+- **The Ledger is exposed unconditionally in `view_for`**, not gated by
+  phase, alive/dead status, or Hand/Table membership like most other
+  fields, since section 2.5 is explicit that it's public and permanent
+  for everyone at all times.
+- **No scoring, ranking, or suspicion-computation function exists
+  anywhere in the engine**, verified by an actual automated test
+  (`test_no_scoring_or_ranking_function_exists_in_the_engine`) that greps
+  `engine/*.py` for the exact terms the document names, not just a manual
+  one-time check. Had to reword two of my own explanatory comments that
+  were incidentally tripping this same grep pattern while describing the
+  absence of scoring, worth remembering that comments count too, not just
+  code.
+
+**Acceptance criteria, all verified:**
+- Every vote recorded with round, voter, and target
+- Stand asides recorded distinctly from votes
+- Losing side of lynch computed per player per round
+- Speaking time accumulated per player (mechanism deferred, storage done)
+- No scoring function exists anywhere in the engine (grep returns zero
+  matches, enforced by a real test now, not just a one-time check)
+
+**Deliberately not done in Phase 4:**
+- No actual speaking-time measurement mechanism, confirmed deferred, see
+  above.
+- No frontend accretion-mark rendering (section 6.7's directional marks,
+  filled bars, etc.) -- that's Phase 9, The Room. This phase only built
+  the data those marks will eventually be drawn from.
+- `server/`, `frontend/` untouched. **Not pushed**, per the confirmed
+  policy.
+
+## Phases 5 through 15: not started
