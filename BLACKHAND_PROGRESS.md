@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 1 complete. Phase 2 not started.**
+**Current status: Phase 2 complete. Phase 3 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -121,4 +121,88 @@ change other than Godfather removal"):
   6+). Expect it to look and behave inconsistently with this document
   until then. That's expected, not a regression.
 
-## Phases 2 through 15: not started
+## Phase 2: Engine, Recruitment (done)
+
+**Files touched:** `engine/game.py`, `engine/models.py`, `engine/actions.py`,
+`engine/resolution.py` (new file, as the build plan specified),
+`engine/__init__.py`, `tests/test_recruitment.py` (new file, 16 tests).
+
+**A genuinely new engine concept had to be introduced: `Phase.OFFER`.**
+Recruitment can't resolve atomically like a kill does, because the
+recipient needs a real response window (accept, refuse, or a timeout the
+server enforces) before the pipeline can continue into investigations and
+the win check. `resolve_night()` now stops after stage 3 and enters
+`Phase.OFFER` when the Black Hand chose to offer instead of kill; two new
+methods finish the job once an answer exists: `respond_to_offer(player_id,
+accepted)` for the recipient's real answer, and `resolve_offer_timeout()`
+for the server-driven timeout path (no player identity check, since
+nobody submitted it). This wasn't optional scope, Recruitment cannot be
+modeled correctly without a way to represent "waiting on one specific
+player's answer" as distinct from "waiting on night actions in general."
+
+**Design decisions made while implementing, not fully specified in the
+document itself:**
+- **A Marked player's literal `role` never changes**, only `player.marked
+  = True` flips, exactly as the vocabulary table's code column specifies.
+  Every faction/team check in the engine that used to read `role` directly
+  now goes through `effective_faction(player)` (role, or Marked), so a
+  recruit is correctly treated as Hand everywhere (win check, `hand_team()`,
+  ally list, endgame reveal, investigation results) without their stored
+  role ever lying about their original assignment. This matters for The
+  Reading later (Phase 13), which is supposed to show who was recruited as
+  a distinct fact from who started as Hand.
+- **`inspector_reads_as` now reflects the target's current effective
+  faction at the moment of investigation, not a frozen snapshot.** This is
+  what actually makes a stale clear "decay" per section 3.4: an
+  Inspector's OLD result doesn't retroactively change, but a NEW
+  investigation of a since-recruited player now correctly reads guilty.
+  Investigations are also deferred behind an active offer (pipeline stage
+  5 waits on stage 4), so an Inspector who targeted the recruit the same
+  night gets the post-answer result, confirmed by
+  `test_investigations_wait_behind_offer_resolution`.
+- **The "byte identical" message is now a single constant,
+  `NO_VISIBLE_DEATH_MESSAGE = "Nobody was killed last night."`,** used for
+  all three silent outcomes: no target chosen, a kill blocked by the
+  Watchman, and an accepted offer. The Phase 1 messages ("Nothing happened
+  last night." and "The Watchman saved X last night.") both leaked
+  information and had to change, this was flagged as a known conflict in
+  the Phase 0 audit and is now fixed. Verified with a direct string-equality
+  test across all three cases, per the document's own instruction that this
+  is "the most important test in this project."
+- **A refusal or timeout death is not distinguished from a normal kill** in
+  either the public event or the round log's public-facing parts, only the
+  detailed round log (dead/post-game only) says an offer was involved.
+- **Offer targets are validated engine-side**, not just left to the UI:
+  `submit_night_action` rejects an `OFFER` aimed at anyone already
+  effectively Hand.
+- **`recruitment_used` is only set `True` at actual resolution** (when
+  `resolve_night()` commits to opening `Phase.OFFER`), not at submission.
+  A Hand can freely switch back to a kill before night resolves without
+  spending the one-time offer, verified by
+  `test_switching_from_offer_back_to_kill_before_resolution_does_not_spend_it`.
+- **`hand_kill_target`/`hand_kill_actor` renamed to `hand_target_id`/
+  `hand_target_actor_id`** since the same shared field now serves both kill
+  and offer targeting, per the confirmed Phase 0 answer that Recruitment
+  reuses the kill-target live-sync mechanism directly.
+
+**Acceptance criteria, all verified:** every item in Phase 2's stated list
+is covered by a dedicated test in `tests/test_recruitment.py` (49 tests
+total pass across both files). One item, "Marked player's Ledger history
+is unchanged," is only partially testable right now since the Ledger
+itself doesn't exist until Phase 4; the current test verifies identity and
+pre-existing state are untouched by recruitment, full verification is
+deferred and noted here so it isn't forgotten.
+
+**Deliberately not done in Phase 2:**
+- No lobby toggle for enabling/disabling Recruitment (section 7.1). Phase
+  2's acceptance list didn't ask for it and `GameConfig` doesn't have a
+  `recruitment_enabled` field yet. Worth deciding explicitly before the
+  Lobby phase (14) needs it.
+- No player-count validation changes (still deferred from Phase 1).
+- `server/`, `frontend/` still untouched beyond what already didn't need
+  changes (the generic `ActionType(msg.get("action_type"))` pass-through
+  in `server/main.py` already handles `"offer"` automatically once a
+  frontend sends it, no server code change was needed for this phase).
+  **Not pushed**, per the confirmed policy above.
+
+## Phases 3 through 15: not started

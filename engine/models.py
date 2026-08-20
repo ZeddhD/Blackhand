@@ -33,16 +33,11 @@ class InvestigationResult(Enum):
     BLOCKED = "blocked"  # roleblocked Inspector; reserved for a future Roleblocker role
 
 
-def inspector_reads_as(role: Role) -> InvestigationResult:
-    if role == Role.HAND:
-        return InvestigationResult.GUILTY
-    return InvestigationResult.INNOCENT
-
-
 class Phase(Enum):
     LOBBY = "lobby"
     ASSIGN_ROLES = "assign_roles"
     NIGHT = "night"
+    OFFER = "offer"
     RESOLVE_NIGHT = "resolve_night"
     DAY_DISCUSSION = "day_discussion"
     VOTING = "voting"
@@ -56,9 +51,23 @@ class Player:
     name: str
     role: Optional[Role] = None
     alive: bool = True
+    marked: bool = False  # accepted a Black Hand recruitment offer
 
     def to_public_dict(self) -> dict:
         return {"id": self.id, "name": self.name, "alive": self.alive}
+
+
+def effective_faction(player: Player) -> Faction:
+    """A Marked player counts as Black Hand for every parity, win, and
+    investigation check from the moment they accept, even though their
+    literal role never changes (section 2.3)."""
+    if player.role is Role.HAND or player.marked:
+        return Faction.HAND
+    return Faction.TABLE
+
+
+def inspector_reads_as(player: Player) -> InvestigationResult:
+    return InvestigationResult.GUILTY if effective_faction(player) == Faction.HAND else InvestigationResult.INNOCENT
 
 
 @dataclass

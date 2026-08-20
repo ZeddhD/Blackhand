@@ -8,6 +8,7 @@ from typing import Optional
 class ActionType(Enum):
     PROTECT = "protect"          # Watchman
     KILL = "kill"                 # Black Hand
+    OFFER = "offer"               # Black Hand, instead of a kill
     INVESTIGATE = "investigate"   # Inspector
 
 

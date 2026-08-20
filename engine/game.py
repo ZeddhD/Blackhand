@@ -5,29 +5,32 @@ Decided ambiguities -- see README.md for rationale:
   - Watchman cannot target the same player on consecutive nights.
   - A roleblocked Inspector gets an explicit "blocked" result (reserved for
     a future Roleblocker role; v1 has none, so this never fires yet).
-  - The Inspector sees the true faction of a target who died earlier the
-    same night (kills resolve before investigations, but faction data
-    never changes on death).
-  - The Black Hand's kill is a single shared choice: any living Hand can
-    set or change it, and it is visible live to the whole Black Hand. There
-    is no way for two Hands to target two different people at once, so
-    there is nothing to tie-break. Tied lynch votes -> no lynch.
+  - The Inspector's result reflects the target's current effective faction
+    (role, or Marked status) at the moment of investigation, not a
+    snapshot from earlier in the game. This is what makes a stale clear
+    decay: a target investigated and cleared before being recruited would
+    read guilty if investigated again afterward.
+  - The Black Hand's kill (or offer) is a single shared choice: any living
+    Hand can set or change it, and it is visible live to the whole Black
+    Hand. There is no way for two Hands to target two different people at
+    once, so there is nothing to tie-break. Tied lynch votes -> no lynch.
+  - Recruitment: protection neither blocks the offer nor saves a refuser.
+    A protected refuser surviving would leak the mechanic (section 2.3).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from . import resolution
 from .actions import ActionType, NightAction
 from .models import (
     Faction,
     GameConfig,
-    InvestigationResult,
     Phase,
     Player,
     Role,
-    faction_of,
-    inspector_reads_as,
+    effective_faction,
 )
 
 
@@ -38,6 +41,12 @@ class IllegalActionError(Exception):
 # Sentinel vote value meaning "I choose not to vote for anyone this round."
 # Not a real player id, so it can never collide with one.
 SKIP_VOTE = "skip"
+
+# The exact public message for every night with no visible death: no
+# target chosen, a kill blocked by the Watchman, or an accepted offer.
+# These three causes must be indistinguishable to living players -- see
+# section 2.3. Do not let any of them use a different string.
+NO_VISIBLE_DEATH_MESSAGE = "Nobody was killed last night."
 
 
 @dataclass
@@ -56,8 +65,11 @@ class Game:
     private_log: Dict[str, List[str]] = field(default_factory=dict)  # player_id -> messages
     round_log: List[dict] = field(default_factory=list)  # full detail, revealed to dead players and post-game
 
-    hand_kill_target: Optional[str] = None
-    hand_kill_actor: Optional[str] = None
+    hand_action_mode: Optional[str] = None  # "kill" or "offer", chosen by any living Hand
+    hand_target_id: Optional[str] = None
+    hand_target_actor_id: Optional[str] = None
+    recruitment_used: bool = False  # the Black Hand gets at most one offer per game, ever
+    _offer_recipient_id: Optional[str] = None
 
     _watchman_self_heal_used: bool = False
     _watchman_last_target: Optional[str] = None
@@ -112,13 +124,17 @@ class Game:
         self.events.clear()
         self.private_log.clear()
         self.round_log.clear()
-        self.hand_kill_target = None
-        self.hand_kill_actor = None
+        self.hand_action_mode = None
+        self.hand_target_id = None
+        self.hand_target_actor_id = None
+        self.recruitment_used = False
+        self._offer_recipient_id = None
         self._watchman_self_heal_used = False
         self._watchman_last_target = None
         for p in self.players:
             p.role = None
             p.alive = True
+            p.marked = False
 
     def player(self, player_id: str) -> Player:
         for p in self.players:
@@ -130,8 +146,9 @@ class Game:
         return [p for p in self.players if p.alive]
 
     def hand_team(self) -> List[Player]:
-        """Players who chat and kill together as the Black Hand."""
-        return [p for p in self.players if p.role is Role.HAND]
+        """Players who chat and kill together as the Black Hand. Includes
+        Marked players from the moment they accept an offer."""
+        return [p for p in self.players if effective_faction(p) == Faction.HAND]
 
     def start_game(self) -> None:
         if self.phase != Phase.LOBBY:
@@ -152,20 +169,22 @@ class Game:
         self.night_number += 1
         self.pending_actions.clear()
         self.private_log.clear()
-        self.hand_kill_target = None
-        self.hand_kill_actor = None
+        self.hand_action_mode = None
+        self.hand_target_id = None
+        self.hand_target_actor_id = None
+        self._offer_recipient_id = None
 
     INDIVIDUAL_NIGHT_ACTION_ROLES = (Role.WATCHMAN, Role.INSPECTOR)
 
     def required_night_actor_ids(self) -> set:
         """Living players who each individually owe a night action (Watchman,
-        Inspector). The Black Hand's kill is a single shared team choice,
-        tracked separately -- see hand_ready()."""
+        Inspector). The Black Hand's kill-or-offer is a single shared team
+        choice, tracked separately -- see hand_ready()."""
         return {p.id for p in self.alive_players() if p.role in self.INDIVIDUAL_NIGHT_ACTION_ROLES}
 
     def hand_ready(self) -> bool:
         hand_alive = [p for p in self.alive_players() if p.role is Role.HAND]
-        return not hand_alive or self.hand_kill_target is not None
+        return not hand_alive or self.hand_target_id is not None
 
     def night_actions_ready(self) -> bool:
         return self.hand_ready() and self.required_night_actor_ids() <= set(self.pending_actions.keys())
@@ -191,8 +210,19 @@ class Game:
             if actor.role != Role.HAND:
                 raise IllegalActionError("Only the Black Hand can submit a kill")
             # Shared team choice: any living Hand can set or change it.
-            self.hand_kill_target = target_id
-            self.hand_kill_actor = actor_id
+            self.hand_action_mode = "kill"
+            self.hand_target_id = target_id
+            self.hand_target_actor_id = actor_id
+        elif action_type == ActionType.OFFER:
+            if actor.role != Role.HAND:
+                raise IllegalActionError("Only the Black Hand can make an offer")
+            if self.recruitment_used:
+                raise IllegalActionError("The Black Hand has already made its one offer this game")
+            if effective_faction(target) == Faction.HAND:
+                raise IllegalActionError("Cannot offer to a member of the Black Hand")
+            self.hand_action_mode = "offer"
+            self.hand_target_id = target_id
+            self.hand_target_actor_id = actor_id
         elif action_type == ActionType.INVESTIGATE:
             if actor.role != Role.INSPECTOR:
                 raise IllegalActionError("Only the Inspector can investigate")
@@ -224,38 +254,73 @@ class Game:
         else:
             self._watchman_last_target = None
 
-        # 3. Kills (single shared Black Hand choice)
-        if self.hand_kill_target:
-            victim = self.player(self.hand_kill_target)
-            chooser = self.player(self.hand_kill_actor) if self.hand_kill_actor else None
+        # 3. Kills, or the Offer (the Black Hand chooses one)
+        if self.hand_action_mode == "offer" and self.hand_target_id:
+            # Recruitment consumes the Black Hand's one-per-game offer the
+            # moment it's actually delivered, regardless of the outcome.
+            self.recruitment_used = True
+            self._offer_recipient_id = self.hand_target_id
+            chooser = self.player(self.hand_target_actor_id) if self.hand_target_actor_id else None
+            recipient = self.player(self.hand_target_id)
+            if chooser:
+                lines.append(f"{chooser.name} the Black Hand made an offer to {recipient.name}.")
+            self.round_log.append({"title": f"Night {self.night_number}", "lines": lines})
+            # Stages 4 (offer resolution) and 5 (investigations) wait for
+            # the recipient's answer -- see respond_to_offer / resolve_offer_timeout.
+            self.phase = Phase.OFFER
+            return
+
+        if self.hand_target_id:
+            victim = self.player(self.hand_target_id)
+            chooser = self.player(self.hand_target_actor_id) if self.hand_target_actor_id else None
             if chooser:
                 lines.append(f"{chooser.name} the Black Hand chose to kill {victim.name}.")
             if victim.id in protected_ids:
-                self.events.append(f"The Watchman saved {victim.name} last night.")
+                self.events.append(NO_VISIBLE_DEATH_MESSAGE)
                 lines.append(f"{victim.name} was attacked but saved by the Watchman.")
             else:
                 victim.alive = False
                 self.events.append(f"{victim.name} was killed during the night.")
                 lines.append(f"{victim.name} was killed.")
         else:
-            self.events.append("Nothing happened last night.")
+            self.events.append(NO_VISIBLE_DEATH_MESSAGE)
             lines.append("The Black Hand did not choose a target.")
 
-        # 4. Investigations
-        for action in self.pending_actions.values():
-            if action.action_type != ActionType.INVESTIGATE:
-                continue
-            inspector = self.player(action.actor_id)
-            target = self.player(action.target_id)
-            result = inspector_reads_as(target.role)
-            self._log(action.actor_id, f"Investigation of {target.name}: {result.value.upper()}")
-            lines.append(f"{inspector.name} the Inspector investigated {target.name}: {result.value.upper()}.")
+        # 4. Offer resolution -- not applicable this night, see above.
 
-        # 5. Death triggers -- no v1 role has one; reserved stage.
+        # 5. Investigations
+        resolution.resolve_investigations(self, lines)
 
-        # 6. Win condition check happens below.
+        # 6. Death triggers -- no v1 role has one; reserved stage.
 
         self.round_log.append({"title": f"Night {self.night_number}", "lines": lines})
+
+        # 7. Win condition check
+        if self._check_win():
+            return
+        self.phase = Phase.DAY_DISCUSSION
+
+    def respond_to_offer(self, player_id: str, accepted: bool) -> None:
+        """The recipient's answer to the Offer -- 'Take it' or 'Refuse'."""
+        if self.phase != Phase.OFFER:
+            raise IllegalActionError("There is no offer to respond to")
+        if player_id != self._offer_recipient_id:
+            raise IllegalActionError("This offer was not made to you")
+        self._resolve_offer(accepted)
+
+    def resolve_offer_timeout(self) -> None:
+        """The recipient did not answer within the time limit. Mechanically
+        identical to a refusal -- the Black Hand is never told which one
+        happened (section 2.3)."""
+        if self.phase != Phase.OFFER:
+            raise IllegalActionError("There is no offer to time out")
+        self._resolve_offer(accepted=False)
+
+    def _resolve_offer(self, accepted: bool) -> None:
+        lines: List[str] = []
+        resolution.resolve_offer_response(self, accepted, lines)
+        resolution.resolve_investigations(self, lines)
+        self.round_log.append({"title": f"Night {self.night_number} Offer", "lines": lines})
 
         if self._check_win():
             return
@@ -306,7 +371,9 @@ class Game:
                 victim = self.player(leaders[0])
                 victim.alive = False
                 self.events.append(f"{victim.name} was voted out.")
-                caught = " They were a Hand." if faction_of(victim.role) == Faction.HAND else " They were not a Hand."
+                caught = (
+                    " They were a Hand." if effective_faction(victim) == Faction.HAND else " They were not a Hand."
+                )
                 lines.append(f"{victim.name} was voted out ({top} votes).{caught}")
             else:
                 self.events.append("The vote was tied -- no one was voted out.")
@@ -326,8 +393,8 @@ class Game:
     # -- win -----------------------------------------------------------------
 
     def _check_win(self) -> bool:
-        hand_alive = [p for p in self.alive_players() if faction_of(p.role) == Faction.HAND]
-        table_alive = [p for p in self.alive_players() if faction_of(p.role) == Faction.TABLE]
+        hand_alive = [p for p in self.alive_players() if effective_faction(p) == Faction.HAND]
+        table_alive = [p for p in self.alive_players() if effective_faction(p) == Faction.TABLE]
         if not hand_alive:
             self.winner = Faction.TABLE
         elif len(hand_alive) >= len(table_alive):
@@ -356,27 +423,30 @@ class Game:
             "your_id": me.id,
             "your_role": me.role.value if me.role else None,
             "your_alive": me.alive,
+            "marked": me.marked,
             "private_log": list(self.private_log.get(player_id, [])),
             "winner": self.winner.value if self.winner else None,
         }
-        if me.role == Role.HAND:
+        if effective_faction(me) == Faction.HAND:
             base["allies"] = [p.name for p in self.hand_team() if p.id != me.id]
-            base["hand_kill_target_id"] = self.hand_kill_target
-            base["hand_kill_target_name"] = (
-                self.player(self.hand_kill_target).name if self.hand_kill_target else None
-            )
+            base["hand_action_mode"] = self.hand_action_mode
+            base["hand_target_id"] = self.hand_target_id
+            base["hand_target_name"] = self.player(self.hand_target_id).name if self.hand_target_id else None
+            base["recruitment_used"] = self.recruitment_used
         if self.phase == Phase.NIGHT:
             required = self.required_night_actor_ids()
             hand_alive_exists = any(p.role is Role.HAND for p in self.alive_players())
             base["night_actions_total"] = len(required) + (1 if hand_alive_exists else 0)
             base["night_actions_done"] = len(required & set(self.pending_actions.keys())) + (
-                1 if hand_alive_exists and self.hand_kill_target else 0
+                1 if hand_alive_exists and self.hand_target_id else 0
             )
+        if self.phase == Phase.OFFER and player_id == self._offer_recipient_id:
+            base["offer_pending"] = True
         if self.phase == Phase.VOTING:
             base["votes_total"] = len(self.alive_players())
             base["votes_done"] = len(self.votes)
         if not me.alive or self.phase == Phase.GAME_OVER:
             base["round_log"] = list(self.round_log)
         if self.phase == Phase.GAME_OVER:
-            base["hand_reveal"] = [p.name for p in self.players if faction_of(p.role) == Faction.HAND]
+            base["hand_reveal"] = [p.name for p in self.players if effective_faction(p) == Faction.HAND]
         return base
