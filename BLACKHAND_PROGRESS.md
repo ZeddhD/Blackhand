@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 6 complete. Phase 7 not started.**
+**Current status: Phase 7 complete. Phase 8 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -587,4 +587,133 @@ anywhere in `frontend/src`.
   player counts -- still have no interactive UI at all, so the frontend is
   not yet "far enough along to actually work end to end." Hold continues.
 
-## Phases 7 through 15: not started
+## Phase 7: The logo (done)
+
+**Files touched:** `frontend/src/components/Mark.jsx` (new), `frontend/public/favicon.svg`
+(replaced), `frontend/index.html` (added the `<link rel="icon">` that was
+missing entirely, so the favicon was previously unused dead weight),
+`frontend/src/index.css` (`.mark-lockup`/`.mark-lockup-stacked`/
+`.mark-lockup-horizontal`/`.mark-on-paper`/`.wordmark` rules), `frontend/src/App.jsx`
+(mark wired into the Lobby).
+
+**Context note:** the actual `BLACKHAND.md` text had gone missing from
+this session's recoverable context between Phase 6 and Phase 7 (an
+earlier compaction dropped the original paste and it wasn't in either
+session's stored transcript). Per the document's own "ask before
+deviating" rule, this was flagged and the user re-pasted the full
+document rather than letting Phase 7 proceed from a guessed
+reconstruction of section 5 and Phase 7's acceptance list.
+
+**Building the mark itself was the real work of this phase.** Hand
+authoring a single closed SVG path for an asymmetric five finger hand
+by typing raw bezier coordinates blind was judged too error prone to
+trust without a way to actually see the result, so a disposable Python
+pipeline was built in the scratchpad (not committed, per the document's
+own "no external assets" and "single SVG path" rules, only the tooling
+used to arrive at one honestly): `shapely` to construct the palm, wrist,
+and five digits as a union of capsule polygons with deliberately uneven
+finger lengths, angles, and a distinctly angled thumb, `cairosvg` (tried,
+unusable, no native Cairo library on this machine) then `svglib` +
+`reportlab` (usable, rendering to PDF rather than PNG sidesteps the same
+missing Cairo dependency) to actually see intermediate results and catch
+a real defect: the first two geometry attempts produced a visible
+self-intersecting crack at the thumb-to-palm join, confirmed to be a
+genuine geometry gap (not a smoothing artifact) by rendering the raw
+unsmoothed union polygon directly. Fixed by widening the thumb's base
+overlap into the palm rather than by disguising it with heavier
+smoothing. The final path was fit as a closed Catmull-Rom spline through
+34 simplified anchor points (a `poly.simplify()` pass, not the raw ~76
+point capsule-union boundary), producing a compact, genuinely curved
+(`C` commands, not a dense polyline of `L` segments) path, 1266 characters,
+one `<path>`, one `d` attribute, no groups, no strokes. Legibility at
+24px and asymmetry at 200px were both verified by rasterizing the exact
+same curve-fit data (not a separate approximation) with Pillow at 24x24
+and 200x200 before the path was ever written into a component.
+
+**Design decisions made, not fully specified in the document:**
+- **The mark is rendered via `fill="currentColor"`**, not a hardcoded
+  hex, so a single `Mark.jsx` works in both the `--room`-on-`--paper` and
+  `--paper`-on-`--room` cases the document requires (section 5.5) by
+  inheriting whatever color the caller sets, the same pattern
+  `Avatar.jsx` already established in Phase 6. `favicon.svg` is the one
+  necessary exception: a static file outside any React color context, so
+  its fill is hardcoded to `--paper` on a `--room` background (visible
+  against a light or dark browser tab chrome either way).
+- **Hand geometry: normalized to occupy exactly 78% of a 100-unit square
+  viewBox height, centered on the shape's centroid rather than its
+  bounding box**, a literal reading of "optically centered rather than
+  mathematically centered." Bounds after normalization: x 13.1-80.8, y
+  9.6-87.6, confirming it clears the viewBox edges with margin at every
+  size.
+- **Wordmark size capped at `--t-said` (24px, at the low end of that
+  scale), not `--t-event`**, because the Waiting Room already uses
+  `--t-event` for the room code, and section 4.3 is explicit that only
+  one element above `--t-said` may exist on screen at once. The wordmark
+  in the stacked lockup deliberately stays secondary to the room code.
+- **Where it's actually wired in Phase 7 is narrower than section 5.6's
+  full list, because three of the four listed locations don't have a
+  component yet.** The Waiting Room placement (stacked lockup, above the
+  room code mention, inside the current `Lobby` function since Phase 14
+  hasn't rebuilt it into its own beat component) and the favicon are both
+  live today. The Crossing (mark only, 40% opacity, under a Crossing
+  component that is Phase 10's work) and The Reading's closing frame
+  (Phase 13's work) do not exist as components yet, so the mark
+  necessarily doesn't appear there yet either, exactly the same kind of
+  gap Phase 6 left for Show Your Hands and Offer UI. "Page title" from
+  the same bullet is satisfied by the existing `<title>Blackhand</title>`
+  text (unchanged); "share card" doesn't apply, no social-card
+  generation exists anywhere in this project.
+- **A real, unrelated contrast bug was found and fixed one line away from
+  where the mark was placed:** `.room-code` hardcoded `color: var(--paper)`,
+  which is correct in the topbar (room ground) but made the room-code
+  mention inside the Lobby's `.card` (paper ground) paper-on-paper,
+  invisible. The mark's placement directly above that exact line is what
+  surfaced it. Fixed by removing the hardcoded color and letting it
+  inherit from context (`--paper` from `body` in the topbar, `--ink` from
+  `.card` inside the Lobby), the same currentColor pattern used
+  throughout this phase.
+
+**Acceptance criteria, all verified:**
+- Single SVG path, no groups, no strokes: confirmed by grep on both
+  `Mark.jsx` and `favicon.svg` (`<g` and `stroke=` both return nothing,
+  exactly one `<path` in each file).
+- Visibly asymmetric at 200px: confirmed via a direct Pillow raster of
+  the final curve-fit path at 200x200, reviewed directly (uneven finger
+  lengths, a thumb set at a clearly different angle and base position
+  than the fingers, a bent pinky).
+- Still legible at 24px: confirmed via a direct Pillow raster of the same
+  path at 24x24, reviewed directly, still unambiguously an open hand with
+  a distinct thumb.
+- Three lockups implemented: `lockup="mark"`, `"stacked"`, `"horizontal"`
+  all exist in `Mark.jsx` with the document's exact gaps (24px stacked,
+  16px horizontal). Only `"mark"` (favicon) and `"stacked"` (Waiting
+  Room) have a live call site today, `"horizontal"` has no caller yet
+  since nothing in section 5.6's list needing it (header, share card) is
+  built, consistent with the rule that it should appear nowhere outside
+  those four locations.
+- Renders in `--room` and `--paper` only, never `--lamp`: confirmed by
+  grep, `--lamp`/lamp does not appear anywhere in `Mark.jsx` or
+  `favicon.svg` except in an explanatory code comment.
+- Appears in exactly the four locations in 5.6 and nowhere else: grep
+  confirms exactly one import and one render call site (`App.jsx`'s
+  Lobby) plus the favicon file, both accounted for above; no header,
+  navigation, or in-play watermark usage exists anywhere in the tree.
+- `npm run build` succeeds with zero errors. `tests/` still 79/79 passing
+  (no engine changes this phase). Zero em dashes anywhere touched this
+  phase, confirmed by grep.
+
+**Deliberately not done in Phase 7:**
+- The mark does not yet appear at The Crossing or The Reading, since
+  neither component exists yet (Phases 10 and 13).
+- No share card / Open Graph image generation exists to put a horizontal
+  lockup on, consistent with nothing in this codebase producing social
+  cards at all.
+- The disposable geometry-construction script (shapely/svglib/Pillow
+  pipeline) was not committed, per the same "verify live, then delete
+  the script" discipline used for Phase 5's WebSocket verification
+  scripts. Only the resulting path data and the shipped `Mark.jsx`/
+  `favicon.svg` are part of the repository.
+- **Not pushed**, per the confirmed policy. The frontend still has no
+  Show Your Hands or Offer UI (Phase 6's carried-over gap).
+
+## Phases 8 through 15: not started

@@ -252,11 +252,14 @@ body {
   gap: var(--space-1-t);
 }
 
+/* No hardcoded color: --paper in the topbar (room ground), --ink inside a
+   card (paper ground). Fixed alongside the mark, section 5.6's Waiting
+   Room location: this exact line was invisible-on-invisible inside the
+   Lobby card before the mark surfaced it. */
 .room-code {
   font-family: var(--face-rec);
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: var(--paper);
 }
 
 .title {
@@ -267,6 +270,42 @@ body {
   letter-spacing: -0.02em;
   color: var(--paper);
   margin: 0.2em 0;
+}
+
+/* -- The mark (section 5). Room or paper only, via currentColor, never
+   lamp. Only one element above --t-said may be on screen at once, so the
+   wordmark stays at --t-said and below wherever it shares a screen with a
+   larger element like the room code. -------------------------------------- */
+
+.mark-lockup {
+  display: flex;
+  color: var(--paper);
+}
+
+/* The mark sits on --paper (a card) here instead of --room: ink, not paper. */
+.mark-on-paper {
+  color: var(--ink);
+}
+
+.mark-lockup-stacked {
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.mark-lockup-horizontal {
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.wordmark {
+  font-family: var(--face-hand);
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  color: inherit;
 }
 
 .credit {
