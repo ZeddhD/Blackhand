@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useGameSocket } from "./useGameSocket";
 import Letter from "./components/Letter";
 import MafiaChat from "./components/MafiaChat";
+import Mark from "./components/Mark";
 import Timer from "./components/Timer";
 import PlayerRow from "./components/PlayerRow";
 import Room from "./phases/Room";
@@ -186,7 +187,7 @@ export default function App() {
   if (!state) {
     return (
       <div className="screen center">
-        <h1 className="title">BLACKHAND</h1>
+        <Mark lockup="stacked" size={80} />
         <p className="credit">made by ZeddhD</p>
         <p className="muted">{connected ? "Ready." : "Connecting..."}</p>
         <div className="card">
