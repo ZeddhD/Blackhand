@@ -213,7 +213,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .motion-placed,
   .motion-unfolded,
-  .motion-taken {
+  .motion-taken,
+  .letter {
     animation: none;
   }
   .motion-stamped {
@@ -234,6 +235,55 @@ body {
 
 .card .muted {
   color: var(--ink-quiet);
+}
+
+/* -- The Letter (section 4.5). Every piece of private information: role,
+   investigation result, the offer. No border, no shadow: it sits directly
+   on --room and contrast is the separation, unlike .card's offset. The
+   left edge is a fixed, non-random 3px deckle path, identical on every
+   instance because it is a constant polygon, never generated per render.
+   Faction "hand" is the Black Hand's permanent inversion: --room ground,
+   --lamp text, never --paper. -------------------------------------------- */
+
+.letter {
+  width: 320px;
+  max-width: 100%;
+  clip-path: polygon(
+    100% 0%, 100% 100%,
+    0px 100%, 2px 93%, 0px 86%, 3px 79%, 1px 71%, 3px 64%, 0px 57%,
+    2px 50%, 3px 43%, 0px 36%, 1px 29%, 3px 21%, 0px 14%, 2px 7%, 0px 0%
+  );
+  animation: bh-letter-unfold 420ms var(--ease-soft) both;
+  transform-origin: top;
+}
+
+.letter-table {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.letter-hand {
+  background: var(--room);
+  color: var(--lamp);
+}
+
+.letter-page {
+  padding: var(--space-3-t) var(--space-2-t) var(--space-3-t) calc(var(--space-2-t) + 8px);
+}
+
+/* The unfold starts as a near-flat sliver, close to the spec's 4px seam
+   for a typical letter's content height, and grows to full height. A
+   height-based animation could hit 4px exactly but can't know the final
+   content height in advance without measuring the DOM, so this scales
+   instead: exact in duration and easing, an approximation only in how
+   many pixels are visible at the very first frame. */
+@keyframes bh-letter-unfold {
+  from {
+    transform: scaleY(0.02);
+  }
+  to {
+    transform: scaleY(1);
+  }
 }
 
 /* -- Chrome: lines drawn on the room, never paper. ------------------------ */
@@ -640,8 +690,15 @@ button.selected {
 }
 
 .mafia-chat .muted,
-.mafia-chat h2 {
+.mafia-chat h2,
+.letter-hand .muted,
+.letter-hand h2 {
   color: var(--lamp-quiet);
+}
+
+.mafia-chat h2,
+.letter-hand h2 {
+  border-bottom-color: var(--lamp-quiet);
 }
 
 .chat-log {

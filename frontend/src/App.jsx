@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useGameSocket } from "./useGameSocket";
+import Letter from "./components/Letter";
 import MafiaChat from "./components/MafiaChat";
 import Mark from "./components/Mark";
 import RoleConfig from "./components/RoleConfig";
@@ -212,7 +213,7 @@ export default function App() {
       )}
 
       {state.phase !== "lobby" && state.phase !== "game_over" && (
-        <div className="card">
+        <Letter faction={state.your_role === "hand" || state.marked ? "hand" : "table"}>
           <h2>Your Role</h2>
           <p className="role-badge">
             You are: <strong>{roleLabel(state.your_role)}</strong>
@@ -221,8 +222,10 @@ export default function App() {
           {state.allies?.length > 0 && (
             <p className="muted">Fellow Hand: {state.allies.join(", ")}</p>
           )}
-        </div>
+        </Letter>
       )}
+
+      <InvestigationLetters log={state.private_log} />
 
       {isDead && <DeadPanel state={state} />}
 
@@ -292,7 +295,7 @@ export default function App() {
       )}
       </div>
 
-      <EventLog events={state.events} privateLog={state.private_log} />
+      <EventLog events={state.events} />
     </div>
   );
 }
@@ -508,17 +511,25 @@ function GameOverPanel({ state, onReturnToLobby, onLeave }) {
   );
 }
 
-function EventLog({ events, privateLog }) {
-  if (!events?.length && !privateLog?.length) return null;
+function InvestigationLetters({ log }) {
+  if (!log?.length) return null;
+  return (
+    <>
+      {log.map((msg, i) => (
+        <Letter key={i} faction="table">
+          <p className="private-log">{msg}</p>
+        </Letter>
+      ))}
+    </>
+  );
+}
+
+function EventLog({ events }) {
+  if (!events?.length) return null;
   return (
     <div className="card log">
-      {privateLog?.map((msg, i) => (
-        <p key={`p${i}`} className="private-log">
-          {msg}
-        </p>
-      ))}
-      {events?.map((msg, i) => (
-        <p key={`e${i}`}>{msg}</p>
+      {events.map((msg, i) => (
+        <p key={i}>{msg}</p>
       ))}
     </div>
   );

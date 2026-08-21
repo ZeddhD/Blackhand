@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 7 complete. Phase 8 not started.**
+**Current status: Phase 8 complete. Phase 9 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -716,4 +716,139 @@ and 200x200 before the path was ever written into a component.
 - **Not pushed**, per the confirmed policy. The frontend still has no
   Show Your Hands or Offer UI (Phase 6's carried-over gap).
 
-## Phases 8 through 15: not started
+## Phase 8: The Letter component (done)
+
+**Files touched:** `frontend/src/components/Letter.jsx` (new), `frontend/src/index.css`
+(`.letter`/`.letter-table`/`.letter-hand`/`.letter-page` rules and the
+`bh-letter-unfold` keyframe), `frontend/src/App.jsx` (role reveal and
+investigation results now render through `Letter`).
+
+**The component itself is small and does not own any dismissal
+judgment.** `Letter({ faction, children })` renders whatever it's given
+inside a `.letter` shell; there is no built-in close button, no outside
+click handling, nothing that could close it. That satisfies "does not
+close on outside click" by construction rather than by a guard, verified
+by grep finding zero click-outside/dismiss code in the file at all. Any
+future beat that needs a deliberate dismiss (Delivery's self-closing 4
+seconds, the Reading's final frame) adds that behavior itself, on top of
+this component, when that beat is actually built.
+
+**The deckle edge is a fixed CSS `clip-path: polygon()`,** not a
+per-instance computation, so "identical on every letter" is true by
+construction rather than by convention: there is exactly one polygon
+definition in `index.css` and every `.letter` uses it. Depth stays within
+the document's stated 3px. The right edge is untouched (100% straight).
+
+**The unfold animation is 420ms, `var(--ease-soft)`, hardcoded rather
+than reading `--tension`,** matching both the literal number in section
+4.5 and the existing `.motion-unfolded` utility Phase 6 already built
+under the same name from section 4.7's motion vocabulary table (Phase 6
+evidently anticipated this component). The "4px seam" detail is
+approximated with a `scaleY(0.02)` starting keyframe rather than a
+height-based animation: a height-based version could hit exactly 4px,
+but only by animating to a guessed oversized `max-height` target, which
+visibly finishes well before the nominal 420ms for typical content and
+would fail "matches spec exactly" on duration. `scaleY` keeps duration
+and easing exact at the cost of the starting sliver being an
+approximation of 4px rather than a guaranteed one, true for a roughly
+150-250px tall letter and noted here as a judgment call, not hidden.
+`.letter` was added to the same `prefers-reduced-motion` block that
+already disables `.motion-unfolded`, so it also snaps open instantly
+under reduced motion.
+
+**No border, no shadow**, per section 4.5's explicit exception to the
+general "paper gets a 2px offset shadow" rule (`.card`'s convention):
+Letters sit directly on `--room` and contrast alone does the separation.
+
+**The Black Hand variant (`faction="hand"`) is `--room` ground, `--lamp`
+text, permanently**, matching section 4.2's "the Black Hand never gets
+paper" rule. Its `.muted`/`h2` treatment was folded into the same rule
+`.mafia-chat` already used in Phase 6 (`color: var(--lamp-quiet)`), plus
+one fix applied to both surfaces at once: `h2`'s `border-bottom` is
+hardcoded to `--ink-faint` globally, which read as a pale, off-theme line
+on a `--room` background. Both `.mafia-chat h2` and `.letter-hand h2` now
+override it to `--lamp-quiet`. This exact inconsistency already existed
+in `.mafia-chat` since Phase 6, unnoticed until building the letter-hand
+variant surfaced the same pattern; fixed for both together rather than
+just the new one.
+
+**"Role reveal, investigation result, and offer all use this single
+component" was verified as three real integration points, not just
+component-API compatibility, with one honest exception:**
+- **Role reveal**: the persistent "Your Role" card (still always-visible
+  for the whole round, since no round-beat orchestration exists yet to
+  drive Delivery's actual 4-second self-closing behavior) now renders
+  inside a `Letter`, `faction` computed from `effective_faction` (role is
+  `"hand"` or `marked` is true), not literal role, matching the pattern
+  established in the engine since Phase 3.
+- **Investigation result**: this is a real, and previously unnoticed,
+  violation of section 4.5 fixed by this phase, not a preexisting
+  correct thing that just needed a new wrapper. `state.private_log`
+  entries were rendered as plain `<p className="private-log">` lines
+  bundled inside the same shared `.card.log` container as public events,
+  literally the "feed line" the document explicitly forbids for private
+  information. `EventLog` now handles only public `events`; a new
+  `InvestigationLetters` component renders each `private_log` entry as
+  its own `Letter` (`faction="table"`, since only the Inspector, a Table
+  role, ever receives one). Verified live against a running server: a
+  7-player game, an Inspector's investigation submitted alongside a
+  Watchman protect and a Hand kill so night actually resolves, and
+  `private_log` confirmed to arrive as `["Investigation of X: INNOCENT"]`
+  exactly as `InvestigationLetters` expects, then the script was deleted.
+- **The offer**: intentionally NOT wired to any live UI this phase. There
+  is no Offer beat screen anywhere in the app (Phase 6 already deferred
+  this entirely, and building one now would duplicate Phase 12's exact
+  stated scope: the fully-black room, verbatim copy, 30 second timer,
+  Take it/Refuse, the struck wire, the permanent interface conversion on
+  accept). `Letter.jsx`'s `faction="hand"` variant is exactly the visual
+  surface Phase 12 will need, and that readiness was confirmed by the
+  existing role-reveal integration already exercising the hand variant
+  live, but no offer-specific screen exists yet. This is the one
+  acceptance line met only partially, said outright here rather than
+  glossed over.
+
+**Verification note:** the visual result (deckle notches, the unfold
+motion, the two color variants) was reasoned through and grep-verified
+for structural correctness, but not seen rendered in an actual browser.
+No screenshot or headless-browser tool is available in this environment,
+unlike Phase 7's hand mark, which had a working SVG-to-raster pipeline
+built specifically to get real visual feedback before the path was
+committed. Said here rather than implied by silence.
+
+**Acceptance criteria:**
+- Unfold animation: 420ms, `var(--ease-soft)` (`cubic-bezier(0.16, 1,
+  0.3, 1)`, matching the document's literal curve), scaleY approximation
+  of the 4px seam. Duration and easing exact; starting pixel height an
+  approximation, noted above.
+- Deckle edge on left only, identical across instances: confirmed by
+  construction, one static `clip-path: polygon()` shared by every
+  `.letter`, right edge untouched.
+- Does not close on outside click: confirmed by grep, no dismiss/outside
+  click code exists in `Letter.jsx` at all.
+- Black Hand variant renders room ground with lamp text: `.letter-hand`
+  sets `background: var(--room)`, `color: var(--lamp)`, confirmed live
+  via the role-reveal integration for a Hand-role player during the same
+  verification run.
+- Role reveal and investigation result both genuinely use this component
+  in the running app, confirmed live. Offer does not yet, confirmed
+  honestly above rather than claimed.
+- `npm run build` succeeds. `tests/` still 79/79 (no engine changes this
+  phase). Zero em dashes, confirmed by grep across every file touched.
+
+**Deliberately not done in Phase 8:**
+- No Offer beat screen, per above (Phase 12).
+- No Delivery-beat orchestration (role reveal appearing once at round
+  start and self-closing after 4 seconds per section 6.2). The build
+  plan's Part 8 phase list does not name a dedicated phase for Delivery
+  or First Light at all (only Phases 8 Letter, 9 Room, 10
+  Crossing/Table, 12 Offer, 13 Reading are listed); this is a real gap in
+  the stated plan worth surfacing to the user rather than silently
+  picking a phase to fold it into.
+- No sound (`"Sound: one paper unfold, 380ms"`), consistent with Phase
+  11 owning all audio and nothing else in this codebase playing sound
+  yet either.
+- **Not pushed**, per the confirmed policy. Same standing gap as
+  Phases 6 and 7: Show Your Hands and Offer still have no interactive
+  UI.
+
+## Phases 9 through 15: not started
