@@ -402,6 +402,68 @@ def test_investigations_wait_behind_offer_resolution():
     assert any("GUILTY" in msg for msg in game.private_log.get(inspector.id, []))
 
 
+def test_marked_inspector_can_no_longer_investigate():
+    # A recruited Inspector or Watchman converts fully into a plain Hand
+    # (a post-launch decision, not in BLACKHAND.md itself): they keep
+    # their literal role forever, but lose access to what it used to do.
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1, Role.INSPECTOR: 1})
+    hand = by_role(game, Role.HAND)[0]
+    inspector = by_role(game, Role.INSPECTOR)[0]
+    game.submit_night_action(hand.id, ActionType.OFFER, inspector.id)
+    game.resolve_night()
+    game.respond_to_offer(inspector.id, accepted=True)
+    assert inspector.marked is True
+    assert inspector.role is Role.INSPECTOR  # literal role never changes
+
+    game.begin_voting()
+    game.resolve_lynch()  # no votes -> advances to the next night
+    other = next(p for p in game.players if p.id not in (hand.id, inspector.id))
+    with pytest.raises(IllegalActionError):
+        game.submit_night_action(inspector.id, ActionType.INVESTIGATE, other.id)
+
+
+def test_marked_watchman_can_no_longer_protect():
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
+    hand = by_role(game, Role.HAND)[0]
+    watchman = by_role(game, Role.WATCHMAN)[0]
+    game.submit_night_action(hand.id, ActionType.OFFER, watchman.id)
+    game.resolve_night()
+    game.respond_to_offer(watchman.id, accepted=True)
+
+    game.begin_voting()
+    game.resolve_lynch()
+    with pytest.raises(IllegalActionError):
+        game.submit_night_action(watchman.id, ActionType.PROTECT, watchman.id)
+
+
+def test_marked_special_role_no_longer_required_to_act():
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1, Role.INSPECTOR: 1})
+    hand = by_role(game, Role.HAND)[0]
+    inspector = by_role(game, Role.INSPECTOR)[0]
+    game.submit_night_action(hand.id, ActionType.OFFER, inspector.id)
+    game.resolve_night()
+    game.respond_to_offer(inspector.id, accepted=True)
+    assert inspector.id not in game.required_night_actor_ids()
+
+
+def test_marked_player_can_still_submit_kill_on_a_later_night():
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1, Role.INSPECTOR: 1})
+    hand = by_role(game, Role.HAND)[0]
+    inspector = by_role(game, Role.INSPECTOR)[0]
+    game.submit_night_action(hand.id, ActionType.OFFER, inspector.id)
+    game.resolve_night()
+    game.respond_to_offer(inspector.id, accepted=True)
+    assert game.phase == Phase.DAY_DISCUSSION
+
+    game.begin_voting()
+    game.resolve_lynch()
+    assert game.phase == Phase.NIGHT
+
+    victim = next(p for p in game.players if p.id not in (hand.id, inspector.id))
+    game.submit_night_action(inspector.id, ActionType.KILL, victim.id)  # no raise
+    assert game.hand_target_id == victim.id
+
+
 def test_switching_from_offer_back_to_kill_before_resolution_does_not_spend_it():
     game = make_offer_game(names=["A", "B", "C", "D", "E", "F"])
     hand = by_role(game, Role.HAND)[0]

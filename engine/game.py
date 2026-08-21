@@ -22,6 +22,12 @@ Decided ambiguities -- see README.md for rationale:
     can offer from the first night; one that starts with more has to lose
     every member but one first. This is a deliberate design decision made
     after the original 15-phase build, not part of BLACKHAND.md itself.
+  - A Marked player converts fully into a plain Hand: recruiting an
+    Inspector or Watchman does not let them keep investigating or
+    protecting afterward. required_night_actor_ids() stops counting them,
+    and submit_night_action rejects a Marked player's own PROTECT or
+    INVESTIGATE outright, even though their literal role never changes.
+    Also a post-launch decision, not in BLACKHAND.md itself.
 """
 from __future__ import annotations
 
@@ -281,8 +287,16 @@ class Game:
     def required_night_actor_ids(self) -> set:
         """Living players who each individually owe a night action (Watchman,
         Inspector). The Black Hand's kill-or-offer is a single shared team
-        choice, tracked separately -- see hand_ready()."""
-        return {p.id for p in self.alive_players() if p.role in self.INDIVIDUAL_NIGHT_ACTION_ROLES}
+        choice, tracked separately -- see hand_ready(). A Marked player is
+        excluded even if their literal role is Watchman or Inspector: a
+        recruit converts fully into a plain Hand and stops owing their old
+        role's action at all, a deliberate decision (not in BLACKHAND.md
+        itself) made after the original 15-phase build."""
+        return {
+            p.id
+            for p in self.alive_players()
+            if p.role in self.INDIVIDUAL_NIGHT_ACTION_ROLES and not p.marked
+        }
 
     def hand_ready(self) -> bool:
         hand_alive = [p for p in self.alive_players() if effective_faction(p) == Faction.HAND]
@@ -302,6 +316,8 @@ class Game:
             raise IllegalActionError("Cannot target a dead player")
 
         if action_type == ActionType.PROTECT:
+            if actor.marked:
+                raise IllegalActionError("A Marked player acts only as Black Hand now")
             if actor.role != Role.WATCHMAN:
                 raise IllegalActionError("Only the Watchman can protect")
             if target.id == actor.id and self._watchman_self_heal_used:
@@ -338,6 +354,8 @@ class Game:
             self.hand_target_id = target_id
             self.hand_target_actor_id = actor_id
         elif action_type == ActionType.INVESTIGATE:
+            if actor.marked:
+                raise IllegalActionError("A Marked player acts only as Black Hand now")
             if actor.role != Role.INSPECTOR:
                 raise IllegalActionError("Only the Inspector can investigate")
 

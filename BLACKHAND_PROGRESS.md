@@ -1876,3 +1876,70 @@ this session.
 (section 4.6) remains an approximation everywhere it's used, including
 here. The Waiting Room's optional written-line prompt (section 6.1)
 remains unspecified anywhere in the document and unguessed-at.
+
+### A Marked recruit converts fully into a plain Hand (engine/game.py)
+
+**The change:** an Inspector or Watchman who accepts the Offer loses
+access to their original role's night action entirely, the moment
+they're marked. Their literal `role` field never changes (still
+`inspector`/`watchman` forever, since role reveals and the Reading rely
+on it), but `required_night_actor_ids()` stops counting them, and
+`submit_night_action`'s PROTECT and INVESTIGATE branches now reject a
+Marked actor outright with `"A Marked player acts only as Black Hand
+now"`, before the existing per-role checks even run.
+
+**Why:** this was a genuine, previously-undecided ambiguity in
+`BLACKHAND.md` itself, surfaced by directly reading the engine code
+rather than the spec (which never addresses the case at all) while
+explaining the game's flow. Before this change the engine technically
+still let a recruited Inspector/Watchman submit their old action --
+nothing in `submit_night_action` checked `marked` on those branches --
+while the frontend only ever offered a Marked player the Hand's
+kill/offer picker, never their old role's UI. That meant the two layers
+already disagreed with each other, silently, with no test covering
+either side of it. Asked the user directly; the answer was that
+recruiting converts someone completely: they become Black Hand in every
+practical sense, full stop, not a hybrid.
+
+**Implementation:** three small changes to `engine/game.py`, all inside
+the two existing night-action code paths rather than a new concept: (1)
+`required_night_actor_ids()` adds `and not p.marked` to its filter, (2)
+the PROTECT branch, (3) the INVESTIGATE branch each gained an
+`if actor.marked: raise IllegalActionError(...)` guard ahead of their
+existing role checks. `effective_faction()` already handled the
+opposite direction (Marked counts as Hand for wins/investigation
+reads/chat) -- this closes the gap on night-action eligibility, the one
+place that pattern hadn't been applied. Documented in the module's
+"Decided ambiguities" docstring alongside the recruitment-eligibility
+entry above.
+
+**Test impact:** added 4 new tests to `tests/test_recruitment.py`: a
+Marked former Inspector can no longer submit INVESTIGATE
+(`IllegalActionError`), a Marked former Watchman can no longer submit
+PROTECT, a Marked player's id drops out of `required_night_actor_ids()`
+once recruited, and a Marked player *can* still submit KILL on a
+subsequent night once play advances past the acceptance's immediate jump
+to `DAY_DISCUSSION` (via `begin_voting()` + `resolve_lynch()` with no
+votes cast, landing back on `NIGHT`) -- confirming they function as a
+full Hand, not merely a blocked ex-Inspector. All 96 tests pass; the one
+test that could plausibly have been affected,
+`test_investigations_wait_behind_offer_resolution`, is unaffected by
+construction, since the Inspector there submits INVESTIGATE in the same
+night as the Offer, before acceptance -- not Marked yet at submission
+time.
+
+**Frontend:** no changes needed. The client already only ever renders
+the Hand's kill/offer picker for a Marked player (`isHandFaction =
+state.your_role === "hand" || state.marked` in `App.jsx`), never their
+original role's action UI -- what had been an accidental gap between
+layers is now an enforced rule on both sides, not a new frontend
+behavior.
+
+**Verified live** against a running `uvicorn` server through the real
+WebSocket protocol: a 6-player game (Hand:1, Inspector:1) offers and
+accepts on night one, confirmed `marked: true` while `your_role` stays
+`"inspector"`, rode a no-vote discussion/voting round back to night two,
+confirmed a submitted `investigate` action is rejected with exactly the
+new error message, then confirmed the same connection's `kill` action on
+the same night is accepted and advances the game normally. Both linters
+(pyflakes, oxlint) clean.
