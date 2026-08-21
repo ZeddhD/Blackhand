@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from engine import ActionType, GameConfig, Phase, Role
+from engine import ActionType, GameConfig, Phase
 from engine.game import IllegalActionError
 from .rooms import (
     MAX_PHASE_SECONDS,
@@ -186,7 +186,7 @@ async def ws_endpoint(websocket: WebSocket):
                 room.connected.pop(player_id, None)
                 cancel_disconnect_removal(room, player_id)
                 room.reassign_host_if_needed()
-                left_room, left_player = room, player_id
+                left_room = room
                 room, player_id = None, None
                 await websocket.send_json({"type": "left"})
                 await broadcast_state(left_room)

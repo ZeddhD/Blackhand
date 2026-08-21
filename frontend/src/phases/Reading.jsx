@@ -40,7 +40,7 @@ export default function Reading({ state, seatOrder, onReturnToLobby, onLeave }) 
 
   return (
     <div className="reading">
-      <h1 className="title center">{handWon ? "The Black Hand Wins" : "The Table Wins"}</h1>
+      <h1 className="title t-verdict center">{handWon ? "The Black Hand Wins" : "The Table Wins"}</h1>
 
       <ul className="reading-list">
         {order.map((id, i) => {

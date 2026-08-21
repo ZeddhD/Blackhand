@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from engine import SKIP_VOTE, Game, GameConfig, Role
-from engine.game import IllegalActionError
 
 
 def make_game(room_code="TEST", names=None, role_counts=None):

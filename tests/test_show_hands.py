@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from engine import ActionType, Faction, Game, GameConfig, Phase, Role
+from engine import Faction, Game, GameConfig, Phase, Role
 from engine.game import CALL_IT_VOTE, HOLD_VOTE, IllegalActionError
 
 
