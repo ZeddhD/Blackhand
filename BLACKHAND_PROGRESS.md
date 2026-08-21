@@ -2110,3 +2110,42 @@ build` clean. Verified live against a running server: a real
 kill-vs-protect collision over the actual WebSocket protocol produced
 exactly `"Your protection on Host worked -- they were attacked and
 survived the night."` in that player's `private_log`.
+
+### How to Play replaces the flat Roles glossary on the title screen
+
+**The gap:** the clarity/onboarding evaluation flagged that new players
+had no way to learn the actual game loop before joining, only an
+isolated role-by-role glossary (`RoleExplainer`) with no sense of when
+or why any of it happens. Discussed directly with the user rather than
+just rewritten unilaterally: where it should live, how it should be
+interacted with, whether a separate role reference should still exist,
+and whether to draft the copy for approval first. Landed on: replace
+Roles entirely (not add alongside it), tap-to-unfold letters matching
+the Waiting Room's own `SettingLetter` pattern, no separate role
+glossary at all (role behavior folds into the beat where it actually
+happens), copy drafted and approved in conversation before being built.
+
+**Built (`frontend/src/components/HowToPlay.jsx`, new;
+`frontend/src/App.jsx`; `frontend/src/index.css`).** Six beats, each
+named after the real in-fiction phase it maps to (Before We Begin, The
+Dark, First Light, The Room, The Table, How It Ends) rather than
+generic step numbers, so reading them doubles as a preview of what the
+player will actually see later, not just an abstract rules summary. The
+Dark's beat is where Inspector/Watchman/Black Hand behavior lives now,
+in context, the one deliberate exception to "no separate role list" --
+it's still not a standalone glossary, just the one beat where roles are
+relevant. Reuses the existing `.setting-letter`/`.setting-letter-toggle`/
+`.setting-letter-body` CSS wholesale rather than inventing new classes,
+since the interaction (closed summary, tap to unfold, OPEN/CLOSE
+indicator) is identical to a Waiting Room setting letter. `RoleExplainer`
+and its now-dead `.role-explainer*` CSS were deleted outright, not left
+behind unused. Every line of copy confirmed zero em dashes by hand
+before shipping, per this project's own standing rule (`grep -c` was
+clean).
+
+**Verified:** both linters clean, `npm run build` clean, engine test
+suite unaffected (99/99, no engine changes this entry). Purely frontend
+rendering with no new state or server interaction, so nothing new to
+verify live beyond the build itself -- the same standing "not
+independently browser-verifiable here" gap as every other frontend-only
+change this session.
