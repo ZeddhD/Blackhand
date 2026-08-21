@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 9 complete. Phase 10 not started.**
+**Current status: Phase 10 complete. Phase 11 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -942,4 +942,145 @@ correctly, which is itself worth confirming rather than assuming.
   Phases 6 through 8: Show Your Hands and Offer still have no
   interactive UI.
 
-## Phases 10 through 15: not started
+## Phase 10: The Crossing and The Table (done)
+
+**Files touched:** `frontend/src/phases/Crossing.jsx` (new), `frontend/src/phases/Table.jsx`
+(new), `frontend/src/index.css` (`.crossing*`/`.table-*`/`.stand-aside*`
+rules and three new keyframes), `frontend/src/App.jsx` (seat-order
+capture, the client-side Crossing timer, and a full-takeover early return
+for both beats that bypasses the normal header/screen wrapper entirely).
+
+**The Crossing has no engine phase of its own, and this phase's file
+list is frontend-only, so it is implemented as a client-side timed
+overlay, not a server-driven beat.** The engine goes straight from
+`day_discussion` to `voting`; there is no `Phase.CROSSING`. `App.jsx`
+detects that exact transition (a dedicated `prevPhaseForCrossing` ref,
+kept separate from the existing `prevPhase` ref used for chimes so the
+two effects can't race on which one updates first) and holds a local
+`showCrossing` flag true for a flat 3000ms `setTimeout` before revealing
+the real Table. This is a deliberate scope reading, not an oversight:
+adding a genuine `Phase.CROSSING` would mean touching `engine/` and
+`server/`, neither of which this phase's stated files include, and the
+document's own "ask before deviating" rule cuts toward not doing that
+without being asked, not toward doing it. **The real cost of this
+choice, stated plainly:** the server's 45 second voting countdown starts
+the instant `Phase.VOTING` begins, underneath the Crossing overlay, so a
+player's usable voting window is the configured duration minus the 3
+seconds they spend looking at the Crossing, not the full configured
+number. The timer that eventually appears is accurate to what it shows,
+it just starts a few seconds into an already-running clock. A fully
+correct implementation needs a real `Phase.CROSSING` engine state and
+belongs to a future phase, flagged here rather than silently absorbed.
+
+**Both beats render as a full takeover.** `App.jsx` now has an early
+return, before the normal `.screen`/`header`/`EventLog` render tree,
+that fires whenever a living player is in `voting`: it renders only
+`Crossing` or `Table`, nothing else, satisfying "no chat, no back, no
+tabs, no side panel, the rest of the application does not exist while
+you are here" by construction rather than by hiding elements with CSS.
+The one deliberate exception is the `sr-only` live announcement region,
+duplicated into this branch rather than restructured around, since an
+invisible screen-reader channel isn't "the rest of the application" in
+the sense the document means. A dead player still sees the existing
+`DeadPanel` with normal chrome during voting, unchanged from before this
+phase; nothing in the document describes spectator-specific behavior
+here, so this scope was left alone.
+
+**Seats never reorder, and this is a real per-game guarantee, not a
+per-render one:** `App.jsx` captures `state.players.map(p => p.id)` into
+`seatOrderRef` exactly once, the first time a non-lobby state is seen
+after the game starts, and both `Crossing` and `Table` are handed that
+frozen array rather than reading `state.players`' order directly. A
+dead player's angle in the ring stays reserved and renders as an empty
+dashed marker (`table-seat-empty`) rather than letting the remaining
+seats close the gap, matching "seats never reorder... reordering
+destroys the spatial memory that makes the ring a place" literally.
+
+**Honest limit on verification: "seats never reorder... verified across
+a full 5 round game" could not be fully verified the way the document
+asks.** Seat position is a pure client-rendering property with no
+server-observable signal, and this environment has no browser or
+screenshot tool (the same gap noted in Phase 8). What was actually done:
+a live 7-player game was run through night, discussion, and voting
+against a real server to confirm `state.players`, `state.votes`, and the
+transition sequence all arrive in the shape `Table.jsx` and `Crossing.jsx`
+assume; and the seat-stability guarantee itself was verified by code
+reading, not pixel comparison, confirming `seatOrderRef` is written
+exactly once (guarded by `if (!seatOrderRef.current)`) and never
+consulted from `state.players`' own order anywhere in either component.
+That is a real guarantee by construction, but it is not the same thing
+as watching five actual rounds render in a browser and confirming no
+seat visibly moved, and this document's own discipline is to say that
+difference out loud rather than let "verified" imply more than it does.
+
+**Votes land staggered at 220ms, driven by a real reveal queue, not a
+CSS delay trick:** `Table.jsx` diffs incoming `state.votes` against a
+`knownRef` set of voter ids already seen, queues any new ones, and pops
+the queue on a 220ms `setTimeout` chain, only counting a vote toward a
+seat's visible tally once it's been popped. Confirmed live that
+`state.votes` itself arrives as the plain `{voter_id: target_id}` dict
+the queue logic assumes. The tally badge remounts on each count change
+(`key={count}`) to retrigger the existing `.motion-stamped` utility from
+Phase 6, satisfying "with the wooden stamp" visually; the sound itself
+is Phase 11's job.
+
+**Pulse tempo is tied to remaining time using absolute thresholds**, the
+same pattern `Timer.jsx`'s lamp-at-10-seconds cutoff already established
+in Phase 6, not a percentage of whatever voting duration the host
+configured: linear from a 3000ms period at 45 seconds or more remaining
+down to a 500ms period at 8 seconds or less. "Nearly inaudible at 45,
+impossible to ignore at 8" is audio language describing what Phase 11
+will layer onto this same pulse; this phase only owns the visual rate.
+
+**The Table inverts** (`--ink` ground, `--paper` text) via a dedicated
+`.table-screen` rule, matching section 4.9's explicit statement that this
+is the only Table-facing surface that looks like the Black Hand's own,
+never explained in copy and none was added here either.
+
+**Acceptance criteria:**
+- Crossing runs 3 seconds with no skip control present in the DOM:
+  confirmed by grep, `Crossing.jsx` contains no `button`, `<a>`, or
+  `onClick` at all, and the 3000ms hold is enforced by `App.jsx`'s own
+  `setTimeout`, not anything inside the component that could be
+  bypassed.
+- Ring assembles at 220ms per seat: confirmed, `animationDelay: i * 220ms`
+  on each `.crossing-seat`.
+- Table ground is inverted: confirmed, `.table-screen` sets `--ink`
+  background and `--paper` text.
+- Seats never reorder across rounds: guaranteed by construction
+  (captured once, never re-derived), not independently confirmed by
+  browser observation, stated honestly above.
+- Votes land staggered at 220ms with sound: the 220ms stagger is real
+  and queue-driven, confirmed live against real `state.votes` data.
+  Sound is Phase 11's, not built or claimed here.
+- No chat, no navigation, no side panel reachable while at the Table:
+  confirmed structurally, the full-takeover early return in `App.jsx`
+  renders nothing else during a living player's `voting` phase.
+- Pulse tempo tied to remaining time: confirmed, `pulseDurationMs()`
+  reads `timer.secondsLeft` directly and drives `--pulse-duration`.
+- `npm run build` succeeds. `tests/` still 79/79 (no engine changes this
+  phase, confirmed deliberately, since this phase's whole point was
+  proving the Crossing needs none). Zero em dashes, zero non-zero
+  `border-radius`, confirmed by grep across every file touched.
+
+**Deliberately not done in Phase 10:**
+- No genuine `Phase.CROSSING` engine state, per above; the client-side
+  timing shim costs roughly 3 seconds of the configured voting window on
+  every round, a real and permanent trade-off until a later phase adds
+  the engine-side beat properly.
+- No sound anywhere in either component (the placement sounds, the
+  chairs/footsteps/door ambience, the wooden vote stamp, the pulse's
+  audible layer): Phase 11 owns all of it.
+- Directional vote marks in `Room.jsx` (Phase 9's stated gap) still
+  render as counts, not compass headings toward a seat, even though
+  seats now exist here in Phase 10. Wiring `Room.jsx` to the same
+  `seatOrderRef` so its marks can finally point at a real angle was not
+  done this phase, since Phase 9's file list didn't include it and this
+  phase's didn't either; noted as a natural follow-up, not silently
+  abandoned.
+- No true visual/browser verification of seat stability, per the honest
+  limitation stated above.
+- **Not pushed**, per the confirmed policy. Show Your Hands and Offer
+  still have no interactive UI.
+
+## Phases 11 through 15: not started
