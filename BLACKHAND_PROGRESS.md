@@ -2055,3 +2055,58 @@ pure frontend rendering over already-proven state fields and are not
 independently browser-verifiable in this environment -- the same
 standing gap noted since Phase 15 (no browser/screenshot tool exists
 here at all).
+
+### Watchman private feedback, closing a real asymmetry with the Inspector
+
+**The gap:** surfaced while evaluating whether the Table side of the
+game needed a new equalizing mechanic to match the Black Hand's
+recruit. The conclusion was no -- the existing Inspector / Watchman /
+majority-vote-plus-Ledger trio is theoretically sound -- but checking
+that conclusion against the actual code turned up a real, separate
+asymmetry between the two Table special roles: the Inspector gets a
+guaranteed private result every single night
+(`resolution.resolve_investigations` calls `game._log`), while the
+Watchman got nothing, ever, in real time -- a successful block was only
+ever written to `round_log`, which stays invisible until the Watchman
+is dead or the game has ended. Not a design decision anyone had made on
+purpose; just an oversight once actually checked against the code.
+
+**The fix (`engine/game.py`):** the Watchman now gets a private
+`_log` entry the moment their protection actually blocks the Hand's
+kill -- `"Your protection on {target} worked -- they were attacked and
+survived the night."`, or `"You protected yourself, and survived an
+attack."` for a self-heal. Confirmed directly with the user: only on a
+successful block, not every night the way the Inspector's result fires
+regardless of outcome -- a quiet night stays quiet.
+
+**The one real design constraint, gotten right:** this could not simply
+mirror the Inspector's always-fires pattern, because doing so would
+reopen the exact ambiguity the identical "Nobody was killed last night"
+message exists to protect. The fix therefore never distinguishes "the
+Hand chose no kill target" from "the Hand made an Offer instead" from
+the Watchman's point of view -- both read as nothing, exactly like a
+target that simply wasn't chosen. The check (`hand_action_mode ==
+"kill" and hand_target_id == watchman_action.target_id`) fires from the
+same spot in `resolve_night` regardless of which branch the function
+takes afterward (including the Offer branch's early return before
+investigations get deferred), since `hand_action_mode`/`hand_target_id`
+are already final by the time stage 2 (Protections) runs -- there is no
+scenario where this check could accidentally run before the Offer
+decision is known.
+
+**Frontend:** no changes needed beyond a rename.
+`InvestigationLetters` in `App.jsx` (renders every `private_log` entry
+as its own `Letter`) was never actually investigation-specific -- it
+just renders whatever's in the array -- so the Watchman's new message
+appears through it automatically. Renamed to `PrivateResultLetters` to
+stop the name overpromising what it only used to do by accident.
+
+**Tests:** 4 new in `tests/test_engine.py` -- feedback fires when the
+block actually worked, stays silent when the protected target wasn't
+the one attacked, stays silent on an Offer night (the critical
+ambiguity-preserving case), and the self-heal phrasing reads in second
+person. 99 tests total, all passing. Both linters clean, `npm run
+build` clean. Verified live against a running server: a real
+kill-vs-protect collision over the actual WebSocket protocol produced
+exactly `"Your protection on Host worked -- they were attacked and
+survived the night."` in that player's `private_log`.

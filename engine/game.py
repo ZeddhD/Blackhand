@@ -38,6 +38,13 @@ Decided ambiguities -- see README.md for rationale:
     storage: this project has no mic or voice integration of any kind, so
     nothing could ever have called record_speaking_time in real play.
     Post-launch decision, not in BLACKHAND.md itself.
+  - The Watchman now gets a private, live result the same way the
+    Inspector always has, but only when their protection actually blocked
+    an attack -- a quiet night stays quiet, by the user's own choice,
+    rather than mirroring the Inspector's every-night guaranteed result.
+    Never differentiates "no kill was attempted" from "an offer was made
+    instead," so it can't be used to infer that a recruitment attempt
+    happened. Post-launch decision, not in BLACKHAND.md itself.
 """
 from __future__ import annotations
 
@@ -393,6 +400,28 @@ class Game:
             watchman = self.player(watchman_action.actor_id)
             target = self.player(watchman_action.target_id)
             lines.append(f"{watchman.name} the Watchman protected {target.name}.")
+            # Private, live feedback -- mirrors the Inspector's own
+            # guaranteed per-night private_log entry. Only sent when the
+            # block actually mattered, by the user's own explicit choice:
+            # a silent night off is itself the "nothing to report" signal,
+            # the same way the Inspector's result only ever fires because
+            # they always learn something, not because silence would be
+            # unsafe. Deliberately fires on both a kill night and an
+            # offer night's early return below (hand_action_mode/
+            # hand_target_id are already final by this point) but never
+            # differentiates "no kill was attempted" from "an offer was
+            # made instead" -- both read as nothing happening to a
+            # Watchman whose target wasn't the Hand's kill choice, which
+            # is exactly what keeps this from leaking the one thing the
+            # public silence message exists to hide.
+            if self.hand_action_mode == "kill" and self.hand_target_id == watchman_action.target_id:
+                if watchman_action.target_id == watchman_action.actor_id:
+                    self._log(watchman_action.actor_id, "You protected yourself, and survived an attack.")
+                else:
+                    self._log(
+                        watchman_action.actor_id,
+                        f"Your protection on {target.name} worked -- they were attacked and survived the night.",
+                    )
         else:
             self._watchman_last_target = None
 
