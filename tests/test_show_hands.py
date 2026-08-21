@@ -104,9 +104,10 @@ def test_hold_majority_proceeds_to_night():
 
 
 def test_maximum_three_occurrences_per_game():
-    # 3 players is always <= threshold, so every round is eligible; the
-    # 4th round must skip straight into Night instead.
-    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    # 6 players at the default threshold of 6 is always <= threshold, so
+    # every round is eligible; the 4th round must skip straight into
+    # Night instead.
+    game = make_game(names=[f"P{i}" for i in range(6)], role_counts={Role.HAND: 1})
     game.start_game()
     for _ in range(3):
         assert game.phase == Phase.SHOW_HANDS

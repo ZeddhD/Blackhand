@@ -124,7 +124,20 @@ async def ws_endpoint(websocket: WebSocket):
                     for name, count in (msg.get("role_counts") or {}).items()
                     if name in ROLE_BY_NAME and count
                 }
-                room.game.config = GameConfig(role_counts=role_counts)
+
+                show_hands_enabled = bool(msg.get("show_hands_enabled", True))
+                try:
+                    show_hands_threshold = int(msg.get("show_hands_threshold", 6))
+                except (TypeError, ValueError):
+                    show_hands_threshold = 6
+                # Section 7.1: Show Your Hands threshold is configurable 5 to 7.
+                show_hands_threshold = max(5, min(7, show_hands_threshold))
+
+                room.game.config = GameConfig(
+                    role_counts=role_counts,
+                    show_hands_enabled=show_hands_enabled,
+                    show_hands_threshold=show_hands_threshold,
+                )
                 timers = msg.get("timers") or {}
 
                 def _clamp_seconds(value, fallback):

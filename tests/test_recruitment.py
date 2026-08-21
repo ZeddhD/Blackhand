@@ -23,13 +23,15 @@ def by_role(game: Game, role: Role):
 
 
 def make_offer_game(names=None, role_counts=None):
-    game = make_game(names=names or ["A", "B", "C", "D"], role_counts=role_counts or {Role.HAND: 1})
+    game = make_game(
+        names=names or ["A", "B", "C", "D", "E", "F"], role_counts=role_counts or {Role.HAND: 1}
+    )
     game.start_game()
     return game
 
 
 def test_offer_can_be_made_at_most_once_per_game():
-    game = make_offer_game(names=["A", "B", "C", "D", "E"])
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"])
     hand = by_role(game, Role.HAND)[0]
     others = [p for p in game.players if p.role is not Role.HAND]
 
@@ -61,7 +63,7 @@ def test_accepted_player_faction_becomes_hand():
 
 
 def test_accepted_player_gains_allies_and_shared_target_visibility():
-    game = make_offer_game(names=["A", "B", "C", "D", "E"])
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"])
     hand = by_role(game, Role.HAND)[0]
     recruit = next(p for p in game.players if p.role is not Role.HAND)
     game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
@@ -99,7 +101,7 @@ def test_timeout_is_treated_as_refusal():
 
 
 def test_watchman_protection_does_not_block_the_offer():
-    game = make_offer_game(names=["A", "B", "C", "D", "E"], role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
     hand = by_role(game, Role.HAND)[0]
     watchman = by_role(game, Role.WATCHMAN)[0]
     recruit = next(p for p in game.players if p.role not in (Role.HAND, Role.WATCHMAN))
@@ -114,7 +116,7 @@ def test_watchman_protection_does_not_block_the_offer():
 
 
 def test_watchman_protection_does_not_save_a_refuser():
-    game = make_offer_game(names=["A", "B", "C", "D", "E"], role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
     hand = by_role(game, Role.HAND)[0]
     watchman = by_role(game, Role.WATCHMAN)[0]
     recruit = next(p for p in game.players if p.role not in (Role.HAND, Role.WATCHMAN))
@@ -127,9 +129,9 @@ def test_watchman_protection_does_not_save_a_refuser():
 
 
 def test_marked_player_counts_for_parity_immediately():
-    # 4 players, 1 Hand. Recruiting the only other non-Watchman player
-    # should bring the Hand faction to parity and end the game instantly.
-    game = make_offer_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    # 7 players, 3 Hand, 4 Table. Recruiting one Table player brings the
+    # Hand faction to 4 versus 3, parity, and should end the game instantly.
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F", "G"], role_counts={Role.HAND: 3})
     hand = by_role(game, Role.HAND)[0]
     recruit = next(p for p in game.players if p.role is not Role.HAND)
     game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
@@ -141,7 +143,7 @@ def test_marked_player_counts_for_parity_immediately():
 
 
 def test_offer_outcome_recorded_on_acceptance_and_visible_at_game_over():
-    game = make_offer_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F", "G"], role_counts={Role.HAND: 3})
     hand = by_role(game, Role.HAND)[0]
     recruit = next(p for p in game.players if p.role is not Role.HAND)
     game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
@@ -163,7 +165,7 @@ def test_offer_outcome_recorded_on_acceptance_and_visible_at_game_over():
 
 
 def test_offer_outcome_recorded_on_refusal_and_visible_at_game_over():
-    game = make_offer_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F", "G"], role_counts={Role.HAND: 3})
     hand = by_role(game, Role.HAND)[0]
     recruit = next(p for p in game.players if p.role is not Role.HAND)
     game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
@@ -183,7 +185,7 @@ def test_offer_outcome_recorded_on_refusal_and_visible_at_game_over():
 
 
 def test_offer_outcome_is_none_when_no_offer_was_ever_made():
-    game = make_offer_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F", "G"], role_counts={Role.HAND: 3})
     hand = by_role(game, Role.HAND)[0]
     victim = next(p for p in game.players if p.role is not Role.HAND)
     game.submit_night_action(hand.id, ActionType.KILL, victim.id)
@@ -192,7 +194,7 @@ def test_offer_outcome_is_none_when_no_offer_was_ever_made():
     assert game.offer_outcome is None
     view = game.view_for(hand.id)
     assert view["offer_outcome"] is None
-    assert isinstance(view["role_reveal"], list) and len(view["role_reveal"]) == 3
+    assert isinstance(view["role_reveal"], list) and len(view["role_reveal"]) == 7
 
 
 def test_marked_players_other_state_is_left_untouched():
@@ -228,7 +230,7 @@ def test_public_feed_message_is_byte_identical_across_all_silent_outcomes():
     blocked_game.resolve_night()
     assert blocked_game.events[-1] == NO_VISIBLE_DEATH_MESSAGE
 
-    accepted_game = make_offer_game(names=["A", "B", "C", "D", "E"])
+    accepted_game = make_offer_game(names=["A", "B", "C", "D", "E", "F"])
     hand2 = by_role(accepted_game, Role.HAND)[0]
     recruit = next(p for p in accepted_game.players if p.role is not Role.HAND)
     accepted_game.submit_night_action(hand2.id, ActionType.OFFER, recruit.id)
@@ -248,7 +250,7 @@ def test_black_hand_is_not_told_refusal_from_timeout():
     # The engine exposes no distinguishing field anywhere -- the Hand's own
     # view after either outcome only shows the normal post-night state,
     # with nothing marking which of the two happened.
-    refused_game = make_offer_game(names=["A", "B", "C", "D", "E"])
+    refused_game = make_offer_game(names=["A", "B", "C", "D", "E", "F"])
     hand = by_role(refused_game, Role.HAND)[0]
     recruit = next(p for p in refused_game.players if p.role is not Role.HAND)
     refused_game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
@@ -256,7 +258,7 @@ def test_black_hand_is_not_told_refusal_from_timeout():
     refused_game.respond_to_offer(recruit.id, accepted=False)
     refused_view = refused_game.view_for(hand.id)
 
-    timeout_game = make_offer_game(names=["A", "B", "C", "D", "E"])
+    timeout_game = make_offer_game(names=["A", "B", "C", "D", "E", "F"])
     hand2 = by_role(timeout_game, Role.HAND)[0]
     recruit2 = next(p for p in timeout_game.players if p.role is not Role.HAND)
     timeout_game.submit_night_action(hand2.id, ActionType.OFFER, recruit2.id)
@@ -270,14 +272,14 @@ def test_black_hand_is_not_told_refusal_from_timeout():
 
 
 def test_cannot_offer_to_a_member_of_the_black_hand():
-    game = make_offer_game(names=["A", "B", "C", "D", "E"], role_counts={Role.HAND: 2})
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 2})
     h1, h2 = by_role(game, Role.HAND)
     with pytest.raises(IllegalActionError):
         game.submit_night_action(h1.id, ActionType.OFFER, h2.id)
 
 
 def test_offer_recipient_only_can_respond():
-    game = make_offer_game(names=["A", "B", "C", "D", "E"])
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"])
     hand = by_role(game, Role.HAND)[0]
     recruit, bystander = [p for p in game.players if p.role is not Role.HAND][:2]
     game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
@@ -308,7 +310,7 @@ def test_investigations_wait_behind_offer_resolution():
 
 
 def test_switching_from_offer_back_to_kill_before_resolution_does_not_spend_it():
-    game = make_offer_game(names=["A", "B", "C", "D", "E"])
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"])
     hand = by_role(game, Role.HAND)[0]
     a, b = [p for p in game.players if p.role is not Role.HAND][:2]
 
@@ -335,7 +337,7 @@ def test_recipient_disconnecting_during_offer_resolves_it_as_a_timeout():
     # A vanished recipient must not leave the game stuck in Phase.OFFER
     # forever -- the generic disconnect-removal path would just mark them
     # dead without ever resolving the offer.
-    game = make_offer_game(names=["A", "B", "C", "D", "E"])
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"])
     hand = by_role(game, Role.HAND)[0]
     recruit = next(p for p in game.players if p.role is not Role.HAND)
     game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)

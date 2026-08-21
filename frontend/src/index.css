@@ -981,6 +981,73 @@ button.selected {
   width: 100%;
 }
 
+/* -- The Waiting Room (section 6.1). Room ground, minimal paper; the
+   stacked mark and the room code are the only large things here. -------- */
+
+.waiting-room {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3-t);
+  width: 100%;
+}
+
+.room-code-big {
+  margin: 0;
+  text-align: center;
+  color: var(--paper);
+}
+
+/* One letter per player, unopened, face down, in a loose row (6.1):
+   deliberately not the full Letter component. These never unfold, never
+   carry content, so they don't get its deckle edge or paper ground. */
+.lobby-roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-t);
+  justify-content: center;
+  width: 100%;
+}
+
+.lobby-roster-letter {
+  background: var(--paper);
+  color: var(--ink);
+  padding: var(--space-1-t) var(--space-2-t);
+}
+
+/* -- Configuration letters (section 7.4): each setting is its own letter,
+   unfolds when tapped. Non-hosts never render the body at all, they see
+   the summary line as read-only paper. ------------------------------- */
+
+.setting-letter {
+  width: 100%;
+  max-width: 320px;
+}
+
+.setting-letter-toggle {
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.setting-summary {
+  color: var(--ink-quiet);
+}
+
+.setting-letter-body {
+  margin-top: var(--space-1-t);
+  width: 100%;
+}
+
 /* -- The Reading (section 6.11). THE ROOM's spatial grammar, a normal
    feed, not a takeover: everything rationed all game is spent here. --- */
 
