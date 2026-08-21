@@ -1,7 +1,10 @@
 """End-to-end smoke test against a running server: creates a room, joins
-players, plays a full game via the real WebSocket protocol, and exercises
-reconnection. Not part of the pytest suite -- run manually against a live
-`uvicorn server.main:app`.
+players, plays a full game via the real WebSocket protocol (night
+actions, day discussion, voting, reconnection). Not part of the pytest
+suite -- run manually against a live `uvicorn server.main:app`:
+
+    uvicorn server.main:app --port 8000
+    python scripts/smoke_test.py
 """
 import asyncio
 import json
@@ -9,13 +12,14 @@ import json
 import websockets
 
 URL = "ws://127.0.0.1:8000/ws"
+NAMES = ["Host", "Alice", "Bob", "Carol", "Dave", "Erin", "Frank"]
 
 
 async def connect():
     return await websockets.connect(URL)
 
 
-async def recv_until(ws, mtype, timeout=5):
+async def recv_until(ws, mtype, timeout=10):
     while True:
         raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
         msg = json.loads(raw)
@@ -25,93 +29,78 @@ async def recv_until(ws, mtype, timeout=5):
             print("SERVER ERROR:", msg["message"])
 
 
-async def main():
-    names = ["Host", "Alice", "Bob", "Carol", "Dave"]
-    sockets = [await connect() for _ in names]
+async def state_until_phase(ws, phase, timeout=10):
+    while True:
+        msg = await recv_until(ws, "state", timeout)
+        if msg["state"]["phase"] == phase:
+            return msg["state"]
 
-    await sockets[0].send(json.dumps({"type": "create_room", "name": names[0]}))
+
+async def main():
+    sockets = [await connect() for _ in NAMES]
+
+    await sockets[0].send(json.dumps({"type": "create_room", "name": NAMES[0]}))
     created = await recv_until(sockets[0], "room_created")
     code = created["room_code"]
-    player_ids = {names[0]: created["player_id"]}
+    player_ids = {NAMES[0]: created["player_id"]}
     print("Room created:", code)
 
-    for ws, name in zip(sockets[1:], names[1:]):
+    for ws, name in zip(sockets[1:], NAMES[1:]):
         await ws.send(json.dumps({"type": "join", "room_code": code, "name": name}))
         joined = await recv_until(ws, "joined")
         player_ids[name] = joined["player_id"]
     print("All joined:", player_ids)
 
-    # drain the lobby state broadcasts
-    for ws in sockets:
-        try:
-            while True:
-                await asyncio.wait_for(ws.recv(), timeout=0.3)
-        except asyncio.TimeoutError:
-            pass
-
-    await sockets[0].send(
-        json.dumps(
-            {
-                "type": "start_game",
-                "role_counts": {"mafia": 1, "detective": 1, "doctor": 1, "godfather": 1},
-            }
-        )
-    )
+    # 7 players, 3 Hand, 1 Inspector, 1 Watchman, 2 Civilian: killing one
+    # Table player brings the Black Hand to parity (3 v 3) and ends the
+    # game in one round, which is what this script wants to exercise
+    # quickly rather than play a full multi-round game.
+    await sockets[0].send(json.dumps({
+        "type": "start_game",
+        "role_counts": {"hand": 3, "inspector": 1, "watchman": 1},
+        "timers": {"discussion": 15},
+        "show_hands_enabled": False,
+    }))
 
     states = {}
+    for ws, name in zip(sockets, NAMES):
+        states[name] = await state_until_phase(ws, "night")
 
-    async def collect_states(ws, name, seconds=1.0):
-        try:
-            while True:
-                raw = await asyncio.wait_for(ws.recv(), timeout=seconds)
-                msg = json.loads(raw)
-                if msg["type"] == "state":
-                    states[name] = msg["state"]
-        except asyncio.TimeoutError:
-            pass
-
-    for ws, name in zip(sockets, names):
-        await collect_states(ws, name)
-
-    assert states["Host"]["phase"] == "night", states["Host"]["phase"]
     roles = {name: s["your_role"] for name, s in states.items()}
     print("Roles:", roles)
 
-    mafia_name = next(n for n, r in roles.items() if r == "mafia")
-    detective_name = next(n for n, r in roles.items() if r == "detective")
-    doctor_name = next(n for n, r in roles.items() if r == "doctor")
-    victim_name = next(n for n in names if n not in (mafia_name,))
+    hand_name = next(n for n, r in roles.items() if r == "hand")
+    inspector_name = next(n for n, r in roles.items() if r == "inspector")
+    watchman_name = next(n for n, r in roles.items() if r == "watchman")
+    victim_name = next(n for n, r in roles.items() if r not in ("hand",) and n != watchman_name)
 
-    victim_id = next(p["id"] for p in states[mafia_name]["players"] if p["id"] != player_ids[mafia_name])
-    # mafia kills someone who isn't the doctor, to keep the game going
-    victim_id = next(
-        p["id"] for p in states[mafia_name]["players"] if player_ids[victim_name] == p["id"]
-    )
+    hand_ws = sockets[NAMES.index(hand_name)]
+    victim_id = next(p["id"] for p in states[hand_name]["players"] if p["name"] == victim_name)
+    await hand_ws.send(json.dumps({"type": "night_action", "action_type": "kill", "target_id": victim_id}))
 
-    mafia_ws = sockets[names.index(mafia_name)]
-    await mafia_ws.send(json.dumps({"type": "night_action", "action_type": "kill", "target_id": victim_id}))
-    await recv_until(mafia_ws, "state")
+    inspector_ws = sockets[NAMES.index(inspector_name)]
+    inv_target = next(p for p in states[inspector_name]["players"] if p["name"] != inspector_name)
+    await inspector_ws.send(json.dumps({
+        "type": "night_action", "action_type": "investigate", "target_id": inv_target["id"],
+    }))
 
-    detective_ws = sockets[names.index(detective_name)]
-    target_id = next(p["id"] for p in states[detective_name]["players"] if p["id"] != player_ids[detective_name])
-    await detective_ws.send(
-        json.dumps({"type": "night_action", "action_type": "investigate", "target_id": target_id})
-    )
-    await recv_until(detective_ws, "state")
+    watchman_ws = sockets[NAMES.index(watchman_name)]
+    prot_target = next(p for p in states[watchman_name]["players"] if p["name"] != watchman_name)
+    await watchman_ws.send(json.dumps({
+        "type": "night_action", "action_type": "protect", "target_id": prot_target["id"],
+    }))
 
-    # force-advance the night timer (host only) instead of waiting 75s
-    await sockets[0].send(json.dumps({"type": "force_advance"}))
-
-    for ws, name in zip(sockets, names):
-        await collect_states(ws, name, seconds=2.0)
-
-    print("Phase after night resolve:", states["Host"]["phase"])
-    print("Events:", states["Host"]["events"])
-    assert states["Host"]["phase"] in ("day_discussion", "game_over")
+    while True:
+        final = await recv_until(sockets[0], "state")
+        if final["state"]["phase"] != "night":
+            break
+    print("Phase after night resolve:", final["state"]["phase"])
+    print("Events:", final["state"]["events"])
+    assert final["state"]["phase"] in ("day_discussion", "game_over"), final["state"]["phase"]
 
     # --- reconnection test: kill Bob's socket, reconnect with the same player_id ---
     bob_id = player_ids["Bob"]
-    await sockets[names.index("Bob")].close()
+    await sockets[NAMES.index("Bob")].close()
     new_ws = await connect()
     await new_ws.send(json.dumps({"type": "join", "room_code": code, "player_id": bob_id}))
     rejoined = await recv_until(new_ws, "joined")
@@ -119,8 +108,10 @@ async def main():
     print("Reconnection OK for Bob")
 
     for ws in sockets:
-        if not ws.closed:
+        try:
             await ws.close()
+        except Exception:
+            pass
     await new_ws.close()
     print("SMOKE TEST PASSED")
 
