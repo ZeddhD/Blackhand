@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGameSocket } from "./useGameSocket";
 import MafiaChat from "./components/MafiaChat";
+import Mark from "./components/Mark";
 import RoleConfig from "./components/RoleConfig";
 import Timer from "./components/Timer";
 import PlayerRow from "./components/PlayerRow";
@@ -317,6 +318,7 @@ function Lobby({ state, isHost, onStart, onLeave, roomCode }) {
 
   return (
     <div className="card">
+      <Mark lockup="stacked" size={64} className="mark-on-paper" />
       <h2>Waiting Room</h2>
       <p className="muted">
         Share the code above. Players join at <span className="room-code">{roomCode}</span> on their devices.
