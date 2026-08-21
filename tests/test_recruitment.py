@@ -128,14 +128,34 @@ def test_watchman_protection_does_not_save_a_refuser():
     assert not recruit.alive  # protection does not save a refuser
 
 
+def _kill_and_advance(game, hand_id, victim_id):
+    """Play one full night/day round where the Hand kills victim_id, then
+    advance to the next night with no lynch. Used to thin the table down
+    to a population where recruitment is actually legal under the new
+    eligibility rule (exactly one living Hand, more than 3 players alive)
+    before the test's real assertions."""
+    game.submit_night_action(hand_id, ActionType.KILL, victim_id)
+    game.resolve_night()
+    assert game.phase != Phase.GAME_OVER
+    game.begin_voting()
+    game.resolve_lynch()  # nobody voted -> advances to the next night
+
+
 def test_marked_player_counts_for_parity_immediately():
-    # 7 players, 3 Hand, 4 Table. Recruiting one Table player brings the
-    # Hand faction to 4 versus 3, parity, and should end the game instantly.
-    game = make_offer_game(names=["A", "B", "C", "D", "E", "F", "G"], role_counts={Role.HAND: 3})
+    # 6 players, 1 Hand. Recruitment is legal from night one here (exactly
+    # one living Hand from the start), but two Table players need to die
+    # first so accepting the third recruit actually reaches parity: Hand
+    # 1 -> 2, Table 3 -> 2.
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     hand = by_role(game, Role.HAND)[0]
-    recruit = next(p for p in game.players if p.role is not Role.HAND)
+    table = [p for p in game.players if p.role is not Role.HAND]
+    _kill_and_advance(game, hand.id, table[0].id)
+    _kill_and_advance(game, hand.id, table[1].id)
+
+    recruit = table[2]
     game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
     game.resolve_night()
+    assert game.phase == Phase.OFFER
 
     game.respond_to_offer(recruit.id, accepted=True)
     assert game.phase == Phase.GAME_OVER
@@ -143,9 +163,13 @@ def test_marked_player_counts_for_parity_immediately():
 
 
 def test_offer_outcome_recorded_on_acceptance_and_visible_at_game_over():
-    game = make_offer_game(names=["A", "B", "C", "D", "E", "F", "G"], role_counts={Role.HAND: 3})
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     hand = by_role(game, Role.HAND)[0]
-    recruit = next(p for p in game.players if p.role is not Role.HAND)
+    table = [p for p in game.players if p.role is not Role.HAND]
+    _kill_and_advance(game, hand.id, table[0].id)
+    _kill_and_advance(game, hand.id, table[1].id)
+
+    recruit = table[2]
     game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
     game.resolve_night()
     game.respond_to_offer(recruit.id, accepted=True)
@@ -153,7 +177,7 @@ def test_offer_outcome_recorded_on_acceptance_and_visible_at_game_over():
 
     assert game.offer_outcome == {
         "recipient_name": recruit.name,
-        "night": 1,
+        "night": 3,
         "accepted": True,
     }
     view = game.view_for(hand.id)
@@ -164,24 +188,33 @@ def test_offer_outcome_recorded_on_acceptance_and_visible_at_game_over():
     assert reveal_by_id[recruit.id]["role"] != Role.HAND.value
 
 
-def test_offer_outcome_recorded_on_refusal_and_visible_at_game_over():
-    game = make_offer_game(names=["A", "B", "C", "D", "E", "F", "G"], role_counts={Role.HAND: 3})
+def test_offer_outcome_recorded_on_refusal():
+    # Refusal can no longer be relied on to reach instant parity: the new
+    # eligibility rule locks recruitment out once the table is down to 3
+    # or fewer players, which is exactly the population a single refusal
+    # death would need to swing the game outright. That's the rule
+    # working as intended, not a gap -- this test checks the outcome is
+    # still recorded correctly, not that the game ends immediately.
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     hand = by_role(game, Role.HAND)[0]
-    recruit = next(p for p in game.players if p.role is not Role.HAND)
+    table = [p for p in game.players if p.role is not Role.HAND]
+    _kill_and_advance(game, hand.id, table[0].id)
+
+    recruit = table[1]
     game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
     game.resolve_night()
     game.respond_to_offer(recruit.id, accepted=False)
-    assert game.phase == Phase.GAME_OVER  # the refusal death brings the Hand to parity
 
     assert game.offer_outcome == {
         "recipient_name": recruit.name,
-        "night": 1,
+        "night": 2,
         "accepted": False,
     }
-    view = game.view_for(hand.id)
-    assert view["offer_outcome"]["accepted"] is False
-    reveal_by_id = {r["id"]: r for r in view["role_reveal"]}
-    assert reveal_by_id[recruit.id]["marked"] is False
+    assert recruit.marked is False
+    assert not recruit.alive
+    # offer_outcome/role_reveal are only exposed in view_for at game
+    # over (section 6.11's own gating), and this game hasn't ended.
+    assert "offer_outcome" not in game.view_for(hand.id)
 
 
 def test_offer_outcome_is_none_when_no_offer_was_ever_made():
@@ -276,6 +309,66 @@ def test_cannot_offer_to_a_member_of_the_black_hand():
     h1, h2 = by_role(game, Role.HAND)
     with pytest.raises(IllegalActionError):
         game.submit_night_action(h1.id, ActionType.OFFER, h2.id)
+
+
+def test_offer_blocked_while_more_than_one_hand_is_alive():
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 2})
+    h1 = by_role(game, Role.HAND)[0]
+    recruit = next(p for p in game.players if p.role not in (Role.HAND,))
+    with pytest.raises(IllegalActionError):
+        game.submit_night_action(h1.id, ActionType.OFFER, recruit.id)
+
+
+def test_offer_becomes_legal_once_down_to_the_last_hand():
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 2})
+    h1, h2 = by_role(game, Role.HAND)
+    h2.alive = False  # down to one living Hand
+    recruit = next(p for p in game.players if p.role is not Role.HAND)
+    game.submit_night_action(h1.id, ActionType.OFFER, recruit.id)  # no longer raises
+    assert game.hand_action_mode == "offer"
+
+
+def test_offer_still_blocked_with_three_starting_hands_down_to_two():
+    # Losing one Hand out of three isn't enough -- the rule is "down to
+    # the last living member," not "any Hand has died."
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F", "G"], role_counts={Role.HAND: 3})
+    h1, h2, h3 = by_role(game, Role.HAND)
+    h3.alive = False
+    recruit = next(p for p in game.players if p.role not in (Role.HAND,))
+    with pytest.raises(IllegalActionError):
+        game.submit_night_action(h1.id, ActionType.OFFER, recruit.id)
+
+
+def test_offer_legal_immediately_with_a_single_starting_hand():
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
+    hand = by_role(game, Role.HAND)[0]
+    recruit = next(p for p in game.players if p.role is not Role.HAND)
+    game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)  # no raise, night one
+    assert game.hand_action_mode == "offer"
+
+
+def test_offer_blocked_with_three_or_fewer_players_alive():
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
+    hand = by_role(game, Role.HAND)[0]
+    table = [p for p in game.players if p.role is not Role.HAND]
+    # Down to 3 total alive: the Hand plus 2 Table players.
+    for p in table[:3]:
+        p.alive = False
+    recruit = table[3]
+    with pytest.raises(IllegalActionError):
+        game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
+
+
+def test_offer_legal_with_exactly_four_players_alive():
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
+    hand = by_role(game, Role.HAND)[0]
+    table = [p for p in game.players if p.role is not Role.HAND]
+    # Down to 4 total alive: the Hand plus 3 Table players, one above the lock.
+    for p in table[:2]:
+        p.alive = False
+    recruit = table[2]
+    game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)  # no raise
+    assert game.hand_action_mode == "offer"
 
 
 def test_offer_recipient_only_can_respond():
