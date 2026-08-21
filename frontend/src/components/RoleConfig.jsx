@@ -38,17 +38,19 @@ export default function RoleConfig({ roleCounts, setRoleCounts, playerCount, rea
       {CONFIGURABLE_ROLES.map((role) => (
         <div className="row" key={role}>
           <label>{roleLabel(role)}</label>
-          <button
-            onClick={() =>
-              setRoleCounts((r) => ({ ...r, [role]: Math.max(0, (r[role] || 0) - 1) }))
-            }
-          >
-            -
-          </button>
-          <span>{roleCounts[role] || 0}</span>
-          <button onClick={() => setRoleCounts((r) => ({ ...r, [role]: (r[role] || 0) + 1 }))}>
-            +
-          </button>
+          <div className="row-controls">
+            <button
+              onClick={() =>
+                setRoleCounts((r) => ({ ...r, [role]: Math.max(0, (r[role] || 0) - 1) }))
+              }
+            >
+              -
+            </button>
+            <span>{roleCounts[role] || 0}</span>
+            <button onClick={() => setRoleCounts((r) => ({ ...r, [role]: (r[role] || 0) + 1 }))}>
+              +
+            </button>
+          </div>
         </div>
       ))}
       <p className="muted">

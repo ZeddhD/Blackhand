@@ -42,8 +42,13 @@ function SettingLetter({ label, summary, isHost, children }) {
   return (
     <Letter faction="table" className="setting-letter">
       <button type="button" className="setting-letter-toggle" onClick={() => setOpen((o) => !o)}>
-        <h3>{label}</h3>
-        <span className="t-record setting-summary">{summary}</span>
+        <div className="setting-letter-head">
+          <h3>{label}</h3>
+          <span className="setting-letter-indicator t-whisper" aria-hidden="true">
+            {open ? "CLOSE" : "OPEN"}
+          </span>
+        </div>
+        {!open && <span className="t-record setting-summary">{summary}</span>}
       </button>
       {open && <div className="setting-letter-body motion-unfolded">{children}</div>}
     </Letter>
@@ -93,13 +98,15 @@ export default function WaitingRoom({ state, isHost, onStart, onLeave, roomCode 
       <SettingLetter label="Discussion" isHost={isHost} summary={`${discussion}s`}>
         <div className="row">
           <label>Seconds</label>
-          <button type="button" onClick={() => setDiscussion((s) => Math.max(15, s - 15))}>
-            -
-          </button>
-          <span>{discussion}</span>
-          <button type="button" onClick={() => setDiscussion((s) => Math.min(600, s + 15))}>
-            +
-          </button>
+          <div className="row-controls">
+            <button type="button" onClick={() => setDiscussion((s) => Math.max(15, s - 15))}>
+              -
+            </button>
+            <span>{discussion}</span>
+            <button type="button" onClick={() => setDiscussion((s) => Math.min(600, s + 15))}>
+              +
+            </button>
+          </div>
         </div>
         <p className="muted">15 to 600 seconds. The Table's own 45 seconds is fixed, not configurable.</p>
       </SettingLetter>
@@ -122,19 +129,21 @@ export default function WaitingRoom({ state, isHost, onStart, onLeave, roomCode 
         {showHandsEnabled && (
           <div className="row">
             <label>Threshold</label>
-            <button
-              type="button"
-              onClick={() => setShowHandsThreshold((t) => Math.max(5, t - 1))}
-            >
-              -
-            </button>
-            <span>{showHandsThreshold}</span>
-            <button
-              type="button"
-              onClick={() => setShowHandsThreshold((t) => Math.min(7, t + 1))}
-            >
-              +
-            </button>
+            <div className="row-controls">
+              <button
+                type="button"
+                onClick={() => setShowHandsThreshold((t) => Math.max(5, t - 1))}
+              >
+                -
+              </button>
+              <span>{showHandsThreshold}</span>
+              <button
+                type="button"
+                onClick={() => setShowHandsThreshold((t) => Math.min(7, t + 1))}
+              >
+                +
+              </button>
+            </div>
           </div>
         )}
       </SettingLetter>
