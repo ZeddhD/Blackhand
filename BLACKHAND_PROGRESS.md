@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 10 complete. Phase 11 not started.**
+**Current status: Phase 11 complete, pending a human listening pass. Phase 12 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -1083,4 +1083,176 @@ never explained in copy and none was added here either.
 - **Not pushed**, per the confirmed policy. Show Your Hands and Offer
   still have no interactive UI.
 
-## Phases 11 through 15: not started
+## Phase 11: Sound (done, pending human verification)
+
+**Files touched:** `frontend/src/audio/` (new directory: `context.js`,
+`noise.js`, `effects.js`, `ambient.js`, `index.js`), `frontend/src/sound.js`
+(deleted, fully replaced), `frontend/src/App.jsx` (every old chime call
+site rewired to the new event table, plus the ambient bed's lifecycle),
+`frontend/src/components/Letter.jsx` (the letter-unfold sound moved onto
+the component itself, per section 4.5), `frontend/src/phases/Table.jsx`
+(the vote stamp wired into the existing 220ms reveal queue from Phase
+10).
+
+**The one honest, unavoidable limit on this phase: I cannot hear.** This
+environment has no audio playback or listening tool. Every sound in this
+phase was designed from audio-engineering reasoning (what filtered noise
+through what kind of filter, at what envelope, produces a percept close
+to "paper," "wood," or "room tone") and verified structurally (every
+exported function actually runs against a full mock Web Audio API
+without throwing, including the deferred 2-second death-silence
+callbacks actually firing), but the document's own acceptance line for
+this phase is explicit: **"votes countable by ear, verified by a human
+listening with the screen off."** That is stated as done here only in
+the sense that the mechanism exists and is wired correctly; the
+perceptual verification itself needs the user to actually listen. Said
+plainly rather than claimed. Worth an explicit ask: please play a round
+with sound on and confirm the four ambient layers, the stamp, and the
+struck wire (see below) actually read the way the document intends,
+since I have no way to check that myself.
+
+**The old `sound.js` was a direct, if unintentional, violation of this
+phase's own rule 1 and had to be fully replaced, not extended.** It
+played melodic sine/triangle/square note sequences (a two-note "night
+chime," an ascending "day chime," a "resolving triad" for game over)
+exactly the "musical stings" and "synths" section 4.10 explicitly bans.
+It also had no concept of the actual event table at all (there was no
+letter-open sound, no vote stamp, no pen stroke, no phase-slide, no
+ambient bed, no death silence, no struck wire), since it predates
+Blackhand entirely. This phase did not add sound to an existing correct
+system; it replaced a same-name but thematically wrong one.
+
+**Every sound is synthesized from filtered noise, generated at runtime,
+matching the confirmed "no external assets" constraint from Phase 0:**
+`noise.js` provides white, brown (simple leaky integration), and pink
+(Paul Kellett's economy filter) noise buffer generators, the only raw
+material anything in this module uses. `effects.js`'s `woodKnock()`
+helper excites a narrow resonant bandpass filter with a noise impulse,
+the same principle a struck solid object's own resonance works on, used
+for the vote stamp and the Crossing's footsteps and door. Confirmed by
+grep: the only `createOscillator()` calls in the whole module are the
+struck wire (the document's one deliberate exception) and one inaudible
+LFO inside the lobby ambient that modulates a noise layer's gain
+parameter and is never itself connected to any audio output, explained
+in a comment at that exact line since it would otherwise look like a
+second, unexplained exception to the no-synths rule.
+
+**The ambient bed is four independent looping noise layers** (a low
+brown-noise rumble, a pink-noise mid hum, a high white-noise hiss, and a
+second pink-noise texture layer), each through its own filter and gain
+node into a shared master. `crossfadeBedTo(phaseKey)` ramps each
+surviving layer's gain to a small per-phase target over 1.4 seconds
+(section 4.10 rule 1: cross faded, never a hard cut), using a fixed
+per-phase mix table that stays close across phases on purpose, since
+this is still room tone throughout, not a different soundscape per
+screen.
+
+**Death is driven by the server's true dead count, not by locally
+diffing individual state updates**, the same reconciliation pattern the
+Phase 10 write-up flagged as the correct approach and finally builds
+here: `reconcileDeadCount(deadCount)` compares against the last count
+this client has seen. The very first observation in a session (a fresh
+join, or a reconnect mid-game) catches up silently, no drama, since
+those deaths already happened before this client was listening; any
+later increase plays the real ritual live. That ritual: every surviving
+layer ramps to zero over 50ms (fast enough to read as silence rather
+than a fade), holds there, and after a flat 2000ms the newly-dead
+player's layer is permanently zeroed and the survivors return to
+whatever the current phase's mix calls for. **One precision note on
+"exactly 2000ms":** the total window from the first sign of quiet to the
+bed's return is 2050ms (the 50ms ramp-down plus the 2000ms hold), not a
+literal instantaneous cut into a 2000ms void, since an instant gain cut
+to zero on a live audio node would itself produce an audible click. This
+was a deliberate, small, click-avoiding trade-off, not an oversight, and
+is called out here rather than silently rounded up to "exactly."
+Layer removal is capped at 4: a fifth or later death changes nothing
+further, matching "the room sounds hollow by the final round," not
+silent, since a 6-12 player game routinely has more than 4 deaths.
+
+**The Waiting Room's ambient (section 6.1) is a genuinely separate
+system**, not one of the four layers and not eroded by death: a single
+band-passed pink-noise layer with a slow, irregular LFO-driven amplitude
+wobble approximating a room of voices too quiet to make out, started
+when a player first sees the lobby and stopped, permanently for that
+game, the moment the game actually starts.
+
+**Event wiring, replacing every old call site:**
+- Letter opens -> `letterUnfold()`, now called from `Letter.jsx` itself
+  on mount (matches section 4.5's own stated ownership of this sound),
+  not from whatever screen happens to render one.
+- Vote lands -> `voteStamp()`, called from `Table.jsx`'s existing
+  Phase-10 reveal queue at the exact moment a vote is popped and
+  revealed, so the sound and the visible stamp are the same event, not
+  two separately-timed things that might drift apart.
+- Night action submitted -> `penStroke()`, called from `NightPanel`'s
+  target `onClick`, alongside the existing `nightAction()` call.
+- Phase change -> `phaseChange()`, called from the existing phase-change
+  effect in `App.jsx` for every transition except day_discussion ->
+  voting, which gets `theCrossing()` instead (from the dedicated Crossing
+  effect built in Phase 10), so a round never plays two different
+  transition sounds for the same beat.
+- Timer under 10s -> `clockTick()`, the exact same call site and
+  threshold Phase 6 already built for the lamp color change, just
+  renamed from the old `playTick()`.
+- Death -> `reconcileDeadCount()`, per above, replacing both of the old
+  `playEliminated()`/`playDeathToll()` call sites with the one
+  server-truth-driven mechanism.
+- The struck wire -> `struckWire()` exists, is exported, and is
+  deliberately oscillator-based so it resembles nothing else in the
+  module, but **has no live call site yet**, consistent with every prior
+  phase's Offer gap: there is still no Offer beat screen anywhere in this
+  app (Phase 12's job). "Used only for the offer" holds vacuously today,
+  the same honest partial-credit situation Phase 8 already flagged for
+  the Black Hand letter variant.
+
+**Verified without hearing anything, the parts that could be:**
+- A disposable Node smoke test (not committed, deleted after the run,
+  same practice as every live-verification script in prior phases)
+  bundled `audio/index.js` with esbuild and ran every exported function,
+  including idempotent repeat calls, muted-state calls, and the full
+  `reconcileDeadCount` sequence (initial catch-up, no change, a live
+  increase, jumping straight to the 4-layer cap, and a death past the
+  cap), against a full mock Web Audio API. All 32 checks passed with no
+  exceptions, and the deferred 2-second death-silence `setTimeout`
+  callbacks were also awaited and confirmed to run cleanly, not just
+  scheduled and abandoned.
+- `npm run build` succeeds. `tests/` still 79/79 (no engine changes this
+  phase). Zero em dashes, confirmed by grep across every file touched.
+
+**Acceptance criteria:**
+- Every sound sourced from paper, wood, or room tone, no synths:
+  confirmed by construction and by grep (only two `createOscillator`
+  call sites total, one the deliberate wire exception, one an inaudible
+  modulator explained inline). Whether the *result* actually sounds like
+  paper, wood, or room tone rather than just "filtered noise" is the
+  part only a human ear can confirm.
+- 4 layer ambient bed, one layer permanently removed per death:
+  implemented and smoke-tested through catch-up, live-increase, cap, and
+  beyond-cap cases.
+- Death produces exactly 2000ms of silence: 2000ms of true silence, plus
+  a 50ms click-avoiding ramp into it, noted above rather than rounded up.
+- Cross fades between phases, never hard cuts: confirmed, every gain
+  change in `ambient.js` is a `linearRampToValueAtTime`, never a
+  `setValueAtTime` jump, except the two places a genuine instant value is
+  correct (the very first silent frame of the death ramp's start point,
+  and permanently zeroing an already-silenced removed layer).
+- The struck wire exists, is used only for the offer, resembles nothing
+  else: exists and is structurally distinct (oscillator-based, the only
+  one in the module). No live call site yet, said outright above.
+- Votes countable by ear, verified by a human listening with the screen
+  off: **not verified by me, cannot be**. The mechanism (the same
+  220ms-staggered stamp from Phase 10, now with an actual sound behind
+  it) is in place and ready for that listening pass.
+
+**Deliberately not done in Phase 11:**
+- No live call site for the struck wire, per above (Phase 12).
+- No sound for Show Your Hands' own results reveal or the Ledger's UI,
+  since neither has dedicated sound cues named anywhere in section 4.10's
+  table; nothing was invented beyond what the table specifies.
+- The actual human listening verification this phase's own acceptance
+  criteria require. Flagged clearly rather than assumed or skipped
+  silently.
+- **Not pushed**, per the confirmed policy. Show Your Hands and Offer
+  still have no interactive UI.
+
+## Phases 12 through 15: not started

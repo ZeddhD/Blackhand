@@ -11,29 +11,25 @@ import Crossing from "./phases/Crossing";
 import Table from "./phases/Table";
 import { ROLE_INFO, roleLabel } from "./roles";
 import {
+  clockTick,
+  crossfadeBedTo,
   isSoundEnabled,
-  playDayChime,
-  playDeathToll,
-  playEliminated,
-  playGameOverChime,
-  playNightChime,
-  playTick,
-  playVoteChime,
+  penStroke,
+  phaseChange,
+  reconcileDeadCount,
   setSoundEnabled,
+  startBed,
+  startLobbyAmbient,
+  stopBed,
+  stopLobbyAmbient,
+  theCrossing,
   unlockAudio,
-} from "./sound";
+} from "./audio";
 
 function codeFromUrl() {
   const path = window.location.pathname.replace(/\//g, "");
   return path.length === 4 ? path.toUpperCase() : "";
 }
-
-const PHASE_CHIME = {
-  night: playNightChime,
-  day_discussion: playDayChime,
-  voting: playVoteChime,
-  game_over: playGameOverChime,
-};
 
 const PHASE_ANNOUNCEMENT = {
   night: "Night has fallen. Stay silent.",
@@ -70,9 +66,7 @@ export default function App() {
   const [announcement, setAnnouncement] = useState("");
 
   const prevPhase = useRef(null);
-  const prevDead = useRef(false);
   const lastTick = useRef(null);
-  const prevAlive = useRef({});
   const mainRef = useRef(null);
   const seatOrderRef = useRef(null);
   const prevPhaseForCrossing = useRef(null);
@@ -110,6 +104,7 @@ export default function App() {
     prevPhaseForCrossing.current = state.phase;
     if (state.phase === "voting" && was === "day_discussion") {
       setShowCrossing(true);
+      theCrossing();
       const t = setTimeout(() => setShowCrossing(false), 3000);
       return () => clearTimeout(t);
     }
@@ -121,12 +116,33 @@ export default function App() {
     document.body.dataset.dead = isDead ? "true" : "false";
   }, [isDead]);
 
+  // Phase changes drive both the generic transition cue and the ambient
+  // bed's crossfade (section 4.10). day_discussion -> voting is the one
+  // exception: that transition gets the Crossing's own sound instead of
+  // the generic one, played by the effect above. Leaving or entering the
+  // lobby also starts or stops the two separate ambient systems: the
+  // lobby's human murmur (section 6.1) never plays once the game starts,
+  // and never returns after it does.
   useEffect(() => {
     if (!state) return;
     if (state.phase !== prevPhase.current) {
+      const cameFrom = prevPhase.current;
       prevPhase.current = state.phase;
-      const chime = PHASE_CHIME[state.phase];
-      if (chime) chime();
+
+      if (state.phase === "lobby") {
+        stopBed();
+        startLobbyAmbient();
+      } else {
+        if (cameFrom === "lobby" || cameFrom === null) {
+          stopLobbyAmbient();
+          startBed();
+        }
+        if (!(state.phase === "voting" && cameFrom === "day_discussion")) {
+          phaseChange();
+        }
+        crossfadeBedTo(state.phase);
+      }
+
       setAnnouncement(PHASE_ANNOUNCEMENT[state.phase] || `Phase changed: ${state.phase}`);
       // Move focus to the new phase's content so screen reader users land
       // somewhere meaningful instead of staying wherever focus was before.
@@ -134,28 +150,26 @@ export default function App() {
     }
   }, [state?.phase]);
 
-  useEffect(() => {
-    if (isDead && !prevDead.current) playEliminated();
-    prevDead.current = isDead;
-  }, [isDead]);
-
+  // Death, section 4.10: driven by the server's own dead count, not by
+  // locally diffing individual state updates, so a batch of simultaneous
+  // deaths or a mid-game reconnect can't under- or double-count layers.
   useEffect(() => {
     if (!state) return;
-    const prev = prevAlive.current;
-    const newlyDead = state.players.filter((p) => prev[p.id] === true && !p.alive && p.id !== playerId);
-    if (newlyDead.length > 0) playDeathToll();
-    const next = {};
-    state.players.forEach((p) => {
-      next[p.id] = p.alive;
-    });
-    prevAlive.current = next;
-  }, [state?.players, playerId]);
+    reconcileDeadCount(state.players.filter((p) => !p.alive).length);
+  }, [state?.players]);
+
+  useEffect(() => {
+    if (!state) {
+      stopBed();
+      stopLobbyAmbient();
+    }
+  }, [state]);
 
   useEffect(() => {
     if (!timer || timer.secondsLeft == null) return;
     if (timer.secondsLeft <= 10 && timer.secondsLeft !== lastTick.current) {
       lastTick.current = timer.secondsLeft;
-      playTick();
+      clockTick();
     }
   }, [timer?.secondsLeft]);
 
@@ -446,6 +460,7 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
               onClick={() => {
                 setSelectedTarget(p.id);
                 nightAction(actionType, p.id);
+                penStroke();
               }}
             />
           </li>

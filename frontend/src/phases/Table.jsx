@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Avatar from "../components/Avatar";
+import { voteStamp } from "../audio";
 
 const SKIP_VOTE = "skip";
 
@@ -32,7 +33,10 @@ export default function Table({ state, seatOrder, playerId, timer, vote }) {
     if (pendingTimeoutRef.current) return;
     const step = () => {
       const next = queueRef.current.shift();
-      if (next) setRevealedVoterIds((prev) => [...prev, next]);
+      if (next) {
+        setRevealedVoterIds((prev) => [...prev, next]);
+        voteStamp();
+      }
       if (queueRef.current.length > 0) {
         pendingTimeoutRef.current = setTimeout(step, 220);
       } else {
