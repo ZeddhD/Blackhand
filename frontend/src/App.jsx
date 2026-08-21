@@ -2,11 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useGameSocket } from "./useGameSocket";
 import Letter from "./components/Letter";
 import MafiaChat from "./components/MafiaChat";
-import Mark from "./components/Mark";
-import RoleConfig from "./components/RoleConfig";
 import Timer from "./components/Timer";
 import PlayerRow from "./components/PlayerRow";
 import Room from "./phases/Room";
+import WaitingRoom from "./phases/WaitingRoom";
 import Crossing from "./phases/Crossing";
 import Table from "./phases/Table";
 import Offer from "./phases/Offer";
@@ -302,7 +301,7 @@ export default function App() {
 
       <div ref={mainRef} tabIndex={-1}>
       {state.phase === "lobby" && (
-        <Lobby state={state} isHost={isHost} onStart={startGame} onLeave={leaveRoom} roomCode={roomCode} />
+        <WaitingRoom state={state} isHost={isHost} onStart={startGame} onLeave={leaveRoom} roomCode={roomCode} />
       )}
 
       {state.phase !== "lobby" && state.phase !== "game_over" && (
@@ -371,63 +370,6 @@ function RoleExplainer() {
   );
 }
 
-function Lobby({ state, isHost, onStart, onLeave, roomCode }) {
-  const [roleCounts, setRoleCounts] = useState({ hand: 1, inspector: 1, watchman: 1 });
-  const [discussion, setDiscussion] = useState(60);
-  const [voting, setVoting] = useState(60);
-
-  return (
-    <div className="card">
-      <Mark lockup="stacked" size={64} className="mark-on-paper" />
-      <h2>Waiting Room</h2>
-      <p className="muted">
-        Share the code above. Players join at <span className="room-code">{roomCode}</span> on their devices.
-      </p>
-      <ul className="player-list">
-        {state.players.map((p) => (
-          <li key={p.id}>
-            <PlayerRow name={p.name} offline={state.connected?.[p.id] === false} />
-          </li>
-        ))}
-      </ul>
-      {isHost ? (
-        <>
-          <RoleConfig roleCounts={roleCounts} setRoleCounts={setRoleCounts} playerCount={state.players.length} />
-          <div className="role-config">
-            <h3>Timers</h3>
-            <div className="row">
-              <label>Discussion (sec)</label>
-              <input
-                type="number"
-                min={15}
-                max={600}
-                value={discussion}
-                onChange={(e) => setDiscussion(e.target.value)}
-              />
-            </div>
-            <div className="row">
-              <label>Voting (sec)</label>
-              <input type="number" min={15} max={600} value={voting} onChange={(e) => setVoting(e.target.value)} />
-            </div>
-            <p className="muted">Night has no timer. It ends once every active role has acted.</p>
-          </div>
-          <button
-            className="primary"
-            disabled={state.players.length < 4}
-            onClick={() => onStart(roleCounts, { discussion, voting })}
-          >
-            Start Game
-          </button>
-        </>
-      ) : (
-        <p className="muted">Waiting for the host to start...</p>
-      )}
-      <button className="ghost" onClick={onLeave}>
-        Leave Lobby
-      </button>
-    </div>
-  );
-}
 
 const ACTION_TITLE = {
   kill: "Choose someone to kill",

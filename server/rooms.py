@@ -14,7 +14,11 @@ from fastapi import WebSocket
 from engine import ActionType, Game, GameConfig, Phase, Role
 
 DEFAULT_DISCUSSION_SECONDS = 60
-DEFAULT_VOTING_SECONDS = 60
+# Section 6.8: The Table runs "45 seconds or all voted," a fixed number,
+# not one of section 7.1's configurable settings. The lobby no longer
+# offers a control for it (Phase 14); this default is what actually
+# takes effect now that nothing overrides it in ordinary play.
+DEFAULT_VOTING_SECONDS = 45
 MIN_PHASE_SECONDS = 15
 MAX_PHASE_SECONDS = 600
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from engine import SKIP_VOTE, ActionType, Faction, Game, GameConfig, Phase, Role
+from engine.game import IllegalActionError
 
 
 def make_game(room_code="TEST", names=None, role_counts=None):
@@ -38,6 +39,30 @@ def test_config_validate_requires_a_hand():
 def test_config_validate_rejects_parity_start():
     errors = GameConfig(role_counts={Role.HAND: 4}).validate(8)
     assert any("already holds the table" in e for e in errors)
+
+
+def test_config_validate_rejects_too_few_players():
+    errors = GameConfig(role_counts={Role.HAND: 1}).validate(5)
+    assert any("at least 6 players" in e for e in errors)
+
+
+def test_config_validate_rejects_too_many_players():
+    errors = GameConfig(role_counts={Role.HAND: 1}).validate(13)
+    assert any("at most 12 players" in e for e in errors)
+
+
+def test_config_validate_accepts_the_boundary_player_counts():
+    # Section 3.1's table runs 6 to 12 players inclusive; both ends must
+    # pass the floor/ceiling check on their own (other rules, like hand
+    # count, are exercised by the tests above, not this one).
+    assert GameConfig(role_counts={Role.HAND: 1}).validate(6) == []
+    assert GameConfig(role_counts={Role.HAND: 3}).validate(12) == []
+
+
+def test_start_game_rejects_too_few_players():
+    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    with pytest.raises(IllegalActionError):
+        game.start_game()
 
 
 def test_start_game_assigns_all_roles_and_fills_civilians():
@@ -125,9 +150,9 @@ def test_inspector_sees_civilian_as_innocent():
 
 
 def test_tied_lynch_kills_no_one():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
-    a, b, c, d = game.players
+    a, b, c, d = game.players[:4]
     game.resolve_night()
     game.begin_voting()
     game.submit_vote(a.id, b.id)
@@ -139,7 +164,7 @@ def test_tied_lynch_kills_no_one():
 
 
 def test_table_wins_when_all_hands_dead():
-    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     hand = by_role(game, Role.HAND)[0]
     hand.alive = False
@@ -149,7 +174,9 @@ def test_table_wins_when_all_hands_dead():
 
 
 def test_hand_wins_at_parity():
-    game = make_game(names=["A", "B", "C", "D", "E"], role_counts={Role.HAND: 2})
+    # 7 players, 3 Hand, 4 Table: killing exactly one Table player brings
+    # the survivors to 3 Hand vs 3 Table, parity.
+    game = make_game(names=["A", "B", "C", "D", "E", "F", "G"], role_counts={Role.HAND: 3})
     game.start_game()
     civilians = by_role(game, Role.CIVILIAN)
     civilians[0].alive = False
@@ -220,27 +247,28 @@ def test_dead_player_sees_round_log_but_alive_player_does_not():
 
 
 def test_votes_complete_once_every_alive_player_has_voted():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     game.resolve_night()
     game.begin_voting()
-    a, b, c, d = game.players
+    a, b, c, d, e, f = game.players
     assert not game.votes_complete()
     game.submit_vote(a.id, b.id)
     game.submit_vote(b.id, a.id)
     game.submit_vote(c.id, SKIP_VOTE)
-    assert not game.votes_complete()
     game.submit_vote(d.id, SKIP_VOTE)
+    game.submit_vote(e.id, SKIP_VOTE)
+    assert not game.votes_complete()
+    game.submit_vote(f.id, SKIP_VOTE)
     assert game.votes_complete()
 
 
 def test_skip_vote_does_not_count_toward_lynch_tally():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     game.resolve_night()
     game.begin_voting()
-    a, b, c, d = game.players
-    for p in (a, b, c, d):
+    for p in game.players:
         game.submit_vote(p.id, SKIP_VOTE)
     alive_before = {p.id for p in game.alive_players()}
     game.resolve_lynch()
@@ -249,7 +277,7 @@ def test_skip_vote_does_not_count_toward_lynch_tally():
 
 
 def test_votes_complete_ignores_dead_players():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     # Kill a non-Hand player so the game doesn't end before reaching voting.
     dead = next(p for p in game.players if p.role is not Role.HAND)
@@ -269,21 +297,21 @@ def test_handle_disconnect_removal_in_lobby_drops_player_outright():
 
 
 def test_handle_disconnect_removal_mid_game_marks_eliminated_not_removed():
-    game = make_game(names=["A", "B", "C", "D", "E"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     victim = next(p for p in game.players if p.role is not Role.HAND)
     game.handle_disconnect_removal(victim.id)
     assert victim in game.players  # still in the roster
     assert not victim.alive
-    assert game.phase != Phase.GAME_OVER  # 1 hand vs 3 table remaining, not parity yet
+    assert game.phase != Phase.GAME_OVER  # 1 hand vs 4 table remaining, not parity yet
 
 
 def test_handle_disconnect_removal_clears_their_pending_vote():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     game.resolve_night()
     game.begin_voting()
-    a, b, c, d = game.players
+    a, b = game.players[0], game.players[1]
     game.submit_vote(a.id, b.id)
     game.handle_disconnect_removal(a.id)
     assert a.id not in game.votes
@@ -291,7 +319,7 @@ def test_handle_disconnect_removal_clears_their_pending_vote():
 
 
 def test_handle_disconnect_removal_can_end_the_game():
-    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     hand = by_role(game, Role.HAND)[0]
     game.handle_disconnect_removal(hand.id)
@@ -300,7 +328,7 @@ def test_handle_disconnect_removal_can_end_the_game():
 
 
 def test_return_to_lobby_resets_game_for_a_rematch():
-    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     hand = by_role(game, Role.HAND)[0]
     hand.alive = False
@@ -326,18 +354,18 @@ def test_return_to_lobby_rejected_mid_game():
 
 
 def test_remove_player_allowed_after_game_over():
-    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     hand = by_role(game, Role.HAND)[0]
     hand.alive = False
     game.resolve_night()
     assert game.phase == Phase.GAME_OVER
     game.remove_player(game.players[0].id)
-    assert len(game.players) == 2
+    assert len(game.players) == 5
 
 
 def test_game_over_reveals_hand_to_everyone():
-    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     hand = by_role(game, Role.HAND)[0]
     hand.alive = False

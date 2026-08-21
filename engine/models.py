@@ -82,6 +82,10 @@ class GameConfig:
 
     def validate(self, player_count: int) -> List[str]:
         errors: List[str] = []
+        if player_count < 6:
+            errors.append("Blackhand needs at least 6 players")
+        if player_count > 12:
+            errors.append("Blackhand supports at most 12 players")
         assigned = sum(self.role_counts.values())
         if assigned > player_count:
             errors.append(f"{assigned} roles assigned for {player_count} players")

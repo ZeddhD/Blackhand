@@ -29,7 +29,7 @@ def to_voting(game: Game):
 
 
 def test_every_vote_recorded_with_round_voter_and_target():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     to_voting(game)
     a, b = game.players[0], game.players[1]
     game.submit_vote(a.id, b.id)
@@ -38,7 +38,7 @@ def test_every_vote_recorded_with_round_voter_and_target():
 
 
 def test_a_changed_vote_is_recorded_as_a_second_entry_not_overwritten():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     to_voting(game)
     a, b, c = game.players[0], game.players[1], game.players[2]
     game.submit_vote(a.id, b.id)
@@ -52,7 +52,7 @@ def test_a_changed_vote_is_recorded_as_a_second_entry_not_overwritten():
 
 
 def test_stand_asides_recorded_distinctly_from_votes():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     to_voting(game)
     a, b = game.players[0], game.players[1]
     game.submit_vote(a.id, b.id)
@@ -65,9 +65,9 @@ def test_stand_asides_recorded_distinctly_from_votes():
 
 
 def test_votes_received_derived_from_history():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     to_voting(game)
-    a, b, c, d = game.players
+    a, b, c, d = game.players[:4]
     game.submit_vote(a.id, d.id)
     game.submit_vote(b.id, d.id)
     game.submit_vote(c.id, SKIP_VOTE)
@@ -78,9 +78,9 @@ def test_votes_received_derived_from_history():
 
 
 def test_losing_side_of_a_lynch_computed_per_player():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     to_voting(game)
-    a, b, c, d = game.players
+    a, b, c, d = game.players[:4]
     # b, c vote for d (the eventual lynch target); a votes for b (loses); d stands aside
     game.submit_vote(a.id, b.id)
     game.submit_vote(b.id, d.id)
@@ -97,7 +97,7 @@ def test_losing_side_of_a_lynch_computed_per_player():
 
 
 def test_losing_side_accumulates_across_multiple_rounds():
-    game = make_game(names=["A", "B", "C", "D", "E"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     a = game.players[0]
 
@@ -118,9 +118,9 @@ def test_losing_side_accumulates_across_multiple_rounds():
 
 
 def test_no_losing_side_recorded_on_a_tied_vote():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     to_voting(game)
-    a, b, c, d = game.players
+    a, b, c, d = game.players[:4]
     game.submit_vote(a.id, b.id)
     game.submit_vote(c.id, d.id)
     game.resolve_lynch()
@@ -129,7 +129,7 @@ def test_no_losing_side_recorded_on_a_tied_vote():
 
 
 def test_speaking_time_accumulated_per_player():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     a = game.players[0]
     game.record_speaking_time(a.id, 4.5)
     game.record_speaking_time(a.id, 2.0)
@@ -137,13 +137,13 @@ def test_speaking_time_accumulated_per_player():
 
 
 def test_speaking_time_rejects_unknown_player():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     with pytest.raises(KeyError):
         game.record_speaking_time("nobody", 5.0)
 
 
 def test_speaking_time_ignores_non_positive_values():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     a = game.players[0]
     game.record_speaking_time(a.id, 0)
     game.record_speaking_time(a.id, -3)
@@ -151,7 +151,7 @@ def test_speaking_time_ignores_non_positive_values():
 
 
 def test_ledger_is_public_and_always_present_in_every_view():
-    game = make_game(names=["A", "B", "C", "D"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     to_voting(game)
     a, b = game.players[0], game.players[1]
     game.submit_vote(a.id, b.id)
@@ -165,7 +165,7 @@ def test_ledger_is_public_and_always_present_in_every_view():
 
 
 def test_ledger_survives_a_return_to_lobby_is_cleared_for_rematch():
-    game = make_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     game.start_game()
     hand = by_role(game, Role.HAND)[0]
     hand.alive = False

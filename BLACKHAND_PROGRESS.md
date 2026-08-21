@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 13 complete (Phase 11's human listening pass still pending). Phase 14 not started.**
+**Current status: Phase 14 complete (Phase 11's human listening pass still pending). Phase 15 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -1512,4 +1512,145 @@ undescribed configuration controls.
   interactive UI anywhere, and the build plan still never names a
   dedicated phase for it (flagged again in Phase 12's notes).
 
-## Phases 14 through 15: not started
+## Phase 14: The lobby (done)
+
+**Files touched:** `frontend/src/phases/WaitingRoom.jsx` (new, replaces
+the old inline `Lobby` function), `frontend/src/components/RoleConfig.jsx`
+(read-only mode, an Auto button using section 3.1's table),
+`frontend/src/useGameSocket.js` (`startGame` now sends Show Your Hands
+settings), `frontend/src/App.jsx` (wiring, dead imports removed).
+Genuinely outside this phase's stated frontend-only file list, and the
+largest single detour of any phase so far: `engine/models.py`,
+`server/main.py`, `server/rooms.py`, and four test files (`tests/test_engine.py`,
+`tests/test_ledger.py`, `tests/test_recruitment.py`, `tests/test_show_hands.py`).
+
+**Building this phase's own acceptance criteria surfaced a real,
+long-deferred gap that could not be left alone this time.** Section
+7.3's `validate()` function, given verbatim in the document, has always
+included a 6-to-12 player floor and ceiling. Phase 1's audit flagged
+this as not yet implemented and every phase since has repeated "still
+deferred" rather than build it, correctly, since nothing needed it
+until now: this phase's own acceptance line is "validation runs before
+start," which is meaningless to claim as done while the validate()
+function everyone has been citing is still missing two of its rules.
+Added the floor and ceiling to `GameConfig.validate()` verbatim,
+matching the document's exact copy ("Blackhand needs at least 6
+players", "Blackhand supports at most 12 players").
+
+**That one small addition broke 41 of the 82 existing tests**, because
+most of this project's own test fixtures use 3 to 5 player games for
+simplicity, the same pattern this document's own Phase 0 audit chose
+for engine tests before Blackhand existed. Per the document's own rule
+that engine changes need tests before the phase closes, and that
+nothing is done because it builds, all 41 were fixed properly, not
+skipped or weakened: most were padded to 6+ players with the same role
+assignments and mechanics under test unchanged; four tests that
+specifically exercise exact parity math (`test_hand_wins_at_parity` and
+three of Phase 13's own `offer_outcome` tests) needed their player and
+Hand counts recalculated so the same "exactly one recruit or one kill
+reaches parity" property still holds at 7 players, 3 Hand, 4 Table
+(worked out algebraically: recruiting or killing exactly one Table
+player brings both the acceptance and refusal cases to 3-versus-3, and
+the plain-kill case to the same). Five new tests were added
+specifically for the new floor/ceiling rule itself (both boundaries,
+both violations, and `start_game()` actually raising), since the 41
+padded fixtures only exercise it indirectly by happening to use valid
+counts now. 86 tests total, up from 82, all passing.
+
+**Two more small, precedented protocol completions, not new design:**
+`server/main.py`'s `start_game` handler never read `show_hands_enabled`/
+`show_hands_threshold` from the client at all (Phase 5's own notes
+flagged this exact gap: "no lobby-side way to configure... from the
+client yet"), so the engine's fully-built, fully-tested Show Your Hands
+config had no way to actually reach it from a real lobby. Now reads and
+clamps both (threshold 5 to 7, section 7.1), verified live: a 6-player
+game started with `show_hands_threshold: 5` correctly skipped Show Your
+Hands and went straight to Night, where the previous default (6) would
+have triggered it. Separately, `DEFAULT_VOTING_SECONDS` was 60, not the
+45 section 6.8 states flatly for The Table ("45 seconds or all voted").
+Section 7.1's configurable table lists Discussion length but not Voting
+length at all, and 6.8 gives voting a fixed number the same way Last
+Words and The Crossing get fixed numbers elsewhere, so this reads as an
+oversight, not an intentionally-configurable value: fixed the default,
+and `WaitingRoom.jsx` no longer offers a control for it at all. The
+server's willingness to accept an override was left in place rather than
+removed outright, since 7.2's list doesn't name voting duration
+explicitly and ripping out a currently-functioning, unreachable-from-the-UI
+capability on an inference felt like the wrong side to err on; noted
+here as a judgment call rather than done silently.
+
+**Configuration is letters, not form rows (section 7.4), for real:** a
+new `SettingLetter` wrapper renders each configurable setting as its own
+`Letter`. For a non-host, only the label and a summary line ever render,
+full stop, the editable body is never in the DOM at all for them, not
+just visually hidden, which is what "read only paper" means taken
+literally. For the host, tapping the letter toggles the same editable
+body other phases already use (`RoleConfig`'s +/- steppers, matching
+the existing app-wide interaction language rather than inventing a new
+one). `RoleConfig` itself gained a `readOnly` prop, reused as both the
+non-host's permanent summary and the host's own collapsed summary line,
+so the same formatting logic produces both.
+
+**"Hand count: auto, or manual override" (7.1) is now genuinely both,
+not manual-only:** `RoleConfig` gained an Auto button that fills in
+section 3.1's table for whatever the current player count is. Manual
+override (the existing +/- steppers) was already real.
+
+**Room code at `--t-event`, the only large thing on screen, and the
+copy pattern from 6.1** ("Seven at the table. Three more before we
+begin.") are both implemented as literally as the document's one given
+example allows; the "ready" case past 6 players has no example given at
+all, so its wording ("Ready to begin.") is this project's own plain
+continuation of the same register, not a quotation.
+
+**Roster entries are deliberately not `Letter` instances**: "one letter
+per player, unopened, face down" reads as specifically NOT the opened,
+content-carrying artifact `Letter.jsx` renders (deckle edge, unfold
+animation, the works), so `LobbyRoster` uses its own minimal closed
+paper rectangle showing only a name, nothing that unfolds or reveals.
+
+**Acceptance criteria:**
+- Configuration presented as letters, not form rows: confirmed, every
+  setting is its own `Letter`-wrapped `SettingLetter`.
+- Non-hosts see read-only configuration: confirmed by construction, the
+  editable body is conditionally never rendered for them, not styled
+  away.
+- Validation runs before start with copy matching 4.4's register: the
+  6-12 floor/ceiling now actually exists in the function this phase's
+  own criterion is about, confirmed live (`"Blackhand needs at least 6
+  players"` reaching a real client that tried to start a 3-player game),
+  and the copy is the document's own words, sentence case, no
+  exclamation marks, no apology.
+- Nothing from 7.2 is exposed: confirmed by grep across every file
+  touched (Crossing duration, Last Words duration, First Light's pause,
+  the recruitment silence rule, colors/fonts/sounds, scoring) plus
+  Voting duration's own control being removed from the UI per the
+  judgment call above.
+- Stacked logo prominent: renders at the top of `WaitingRoom` at 80px,
+  the largest mark size used anywhere in the app so far.
+- `npm run build` succeeds. `tests/` now 86/86 (41 fixed, 5 new). Zero
+  em dashes, confirmed by grep across every file touched, engine and
+  server included.
+
+**Deliberately not done in Phase 14:**
+- Three of section 7.1's seven configurable settings have no real engine
+  support at all yet and were not given fake, non-functional toggles:
+  Watchman on/off, Recruitment on/off, and Ledger depth (full / recent 3
+  rounds). Building these for real would mean new `GameConfig` fields
+  wired through the whole pipeline (Watchman's toggle would need to gate
+  role assignment and the whole protection mechanic; Recruitment's would
+  need to gate whether `ActionType.OFFER` is ever legal; Ledger depth
+  would change what `view_for` exposes), each deserving its own careful
+  pass and its own tests, not something to bolt on while nominally doing
+  a frontend-only phase. Flagged here explicitly rather than shipped as
+  UI that looks real and does nothing.
+- The "optional written line... prompted here, never during a round"
+  from section 6.1 has no further specification anywhere in the
+  document: no phase in Part 8 builds it, no field describes what it
+  actually is or does. Not guessed at, consistent with how Delivery and
+  Show Your Hands' own build-plan gaps were handled.
+- **Not pushed**, per the confirmed policy. Show Your Hands still has no
+  interactive UI anywhere in the app, even though its lobby
+  configuration is now fully real.
+
+## Phase 15: not started
