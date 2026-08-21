@@ -84,13 +84,14 @@ export function useGameSocket() {
   const createRoom = useCallback((name) => send({ type: "create_room", name }), [send]);
   const joinRoom = useCallback((code, name) => send({ type: "join", room_code: code, name }), [send]);
   const startGame = useCallback(
-    (roleCounts, timers, showHands) =>
+    (roleCounts, timers, showHands, recruitmentEnabled) =>
       send({
         type: "start_game",
         role_counts: roleCounts,
         timers,
         show_hands_enabled: showHands?.enabled,
         show_hands_threshold: showHands?.threshold,
+        recruitment_enabled: recruitmentEnabled,
       }),
     [send]
   );

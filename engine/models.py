@@ -76,6 +76,7 @@ class GameConfig:
     role_counts: Dict[Role, int] = field(default_factory=dict)
     show_hands_enabled: bool = True
     show_hands_threshold: int = 6  # Show Your Hands becomes available at or below this many living players
+    recruitment_enabled: bool = True  # host-configurable; independent of the eligibility rule in submit_night_action
 
     def hand_count(self) -> int:
         return sum(count for role, count in self.role_counts.items() if role in HAND_ROLES)

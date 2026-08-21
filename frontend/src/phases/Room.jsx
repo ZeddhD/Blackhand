@@ -5,7 +5,8 @@ import Timer from "../components/Timer";
 // letter, carrying whatever marks they have accumulated so far, and
 // nothing else: no vote, no target, no app input at all. Voice does the
 // work here. "The loosest phase in the game, deliberately."
-export default function Room({ players, connected, ledger, timer, discussionSeconds }) {
+export default function Room({ players, connected, ledger, timer, seatOrder }) {
+  const order = seatOrder && seatOrder.length ? seatOrder : players.map((p) => p.id);
   return (
     <div className="room-feed">
       {timer && timer.phase === "day_discussion" && timer.secondsLeft != null && (
@@ -19,7 +20,7 @@ export default function Room({ players, connected, ledger, timer, discussionSeco
             <Letter faction="table">
               <span className="t-name">{p.name}</span>
               {connected?.[p.id] === false && <span className="player-row-offline"> OFFLINE</span>}
-              <PlayerMarks player={p} ledger={ledger} discussionSeconds={discussionSeconds} />
+              <PlayerMarks player={p} ledger={ledger} seatOrder={order} />
             </Letter>
           </li>
         ))}
@@ -28,32 +29,53 @@ export default function Room({ players, connected, ledger, timer, discussionSeco
   );
 }
 
+// The 8-point compass, matching the same clockwise-from-top ring geometry
+// The Table/Crossing use: index 0 sits at the top (-90deg), angle grows
+// clockwise as seat index increases (frontend/src/phases/Table.jsx).
+const COMPASS = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
+
+function seatAngleDeg(seatOrder, playerId) {
+  const idx = seatOrder.indexOf(playerId);
+  if (idx === -1 || seatOrder.length === 0) return null;
+  return (360 / seatOrder.length) * idx - 90;
+}
+
+function arrowForAngle(angleDeg) {
+  const normalized = ((angleDeg % 360) + 360) % 360;
+  const idx = Math.round((normalized + 90) / 45) % 8;
+  return COMPASS[idx];
+}
+
 // Accretion marks (section 6.12). Never cleaned, never summarized into a
-// score: raw counts and a bar, exactly what the Ledger already tracks.
-// True directional marks toward a target's seat position need seat
-// angles, which don't exist until The Crossing assigns them (Phase 10),
-// so these render as plain counts for now, not compass directions.
-function PlayerMarks({ player, ledger, discussionSeconds }) {
+// score: every vote a player has ever cast is its own mark here, grouped
+// only by which real compass direction (toward the target's actual seat
+// on the ring) it pointed, never collapsed into a single opaque count.
+function PlayerMarks({ player, ledger, seatOrder }) {
   const votes = ledger?.votes ?? [];
   const cast = votes.filter((v) => v.voter_id === player.id);
   const standAsides = cast.filter((v) => v.target_id === null).length;
-  const votesCast = cast.length - standAsides;
+  const castTargets = cast.filter((v) => v.target_id !== null);
   const votesReceived = votes.filter((v) => v.target_id === player.id).length;
   const losingSide = ledger?.losing_side_counts?.[player.id] ?? 0;
-  const speaking = ledger?.speaking_seconds?.[player.id] ?? 0;
-  const speakingPct = Math.min(100, (speaking / (discussionSeconds || 60)) * 100);
 
-  const hasAnyMark = votesCast || votesReceived || standAsides || losingSide || speaking || !player.alive;
+  const directionCounts = new Map();
+  for (const v of castTargets) {
+    const angle = seatAngleDeg(seatOrder, v.target_id);
+    const arrow = angle == null ? "→" : arrowForAngle(angle);
+    directionCounts.set(arrow, (directionCounts.get(arrow) || 0) + 1);
+  }
+
+  const hasAnyMark = castTargets.length || votesReceived || standAsides || losingSide || !player.alive;
   if (!hasAnyMark) return null;
 
   return (
     <div className="marks">
-      {votesCast > 0 && (
-        <span className="mark" title="Votes cast">
-          {"→"}
-          {votesCast}
+      {[...directionCounts.entries()].map(([arrow, count]) => (
+        <span key={arrow} className="mark" title="Vote cast, toward the target's seat">
+          {arrow}
+          {count}
         </span>
-      )}
+      ))}
       {votesReceived > 0 && (
         <span className="mark" title="Votes received">
           {"←"}
@@ -70,11 +92,6 @@ function PlayerMarks({ player, ledger, discussionSeconds }) {
         <span className="mark" title="Losing side of a lynch">
           {"×"}
           {losingSide}
-        </span>
-      )}
-      {speaking > 0 && (
-        <span className="mark-bar" title="Speaking time">
-          <span className="mark-bar-fill" style={{ width: `${speakingPct}%` }} />
         </span>
       )}
       {!player.alive && (

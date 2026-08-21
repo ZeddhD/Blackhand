@@ -28,6 +28,16 @@ Decided ambiguities -- see README.md for rationale:
     and submit_night_action rejects a Marked player's own PROTECT or
     INVESTIGATE outright, even though their literal role never changes.
     Also a post-launch decision, not in BLACKHAND.md itself.
+  - Recruitment can now be disabled entirely for a match via
+    GameConfig.recruitment_enabled, independent of the "last living Hand,
+    more than 3 players" eligibility rule above -- a host can turn the
+    whole mechanic off even in games where it would otherwise be legal.
+    Post-launch decision, not in BLACKHAND.md itself.
+  - Speaking-time tracking (the Ledger's per-player accumulated-seconds
+    stat) was removed outright rather than left as permanently-empty
+    storage: this project has no mic or voice integration of any kind, so
+    nothing could ever have called record_speaking_time in real play.
+    Post-launch decision, not in BLACKHAND.md itself.
 """
 from __future__ import annotations
 
@@ -102,7 +112,6 @@ class Game:
     # final vote per round.
     vote_history: List[dict] = field(default_factory=list)
     losing_side_counts: Dict[str, int] = field(default_factory=dict)  # player_id -> rounds on the losing side
-    speaking_seconds: Dict[str, float] = field(default_factory=dict)  # player_id -> accumulated seconds
 
     _watchman_self_heal_used: bool = False
     _watchman_last_target: Optional[str] = None
@@ -175,7 +184,6 @@ class Game:
         self.show_hands_count = 0
         self.vote_history.clear()
         self.losing_side_counts.clear()
-        self.speaking_seconds.clear()
         self._watchman_self_heal_used = False
         self._watchman_last_target = None
         for p in self.players:
@@ -335,6 +343,8 @@ class Game:
         elif action_type == ActionType.OFFER:
             if effective_faction(actor) != Faction.HAND:
                 raise IllegalActionError("Only the Black Hand can make an offer")
+            if not self.config.recruitment_enabled:
+                raise IllegalActionError("Recruitment is disabled for this game")
             if self.recruitment_used:
                 raise IllegalActionError("The Black Hand has already made its one offer this game")
             # The Offer is a last-member's move, not a standing option: a
@@ -503,15 +513,6 @@ class Game:
                 continue
             self.losing_side_counts[voter_id] = self.losing_side_counts.get(voter_id, 0) + 1
 
-    def record_speaking_time(self, player_id: str, seconds: float) -> None:
-        """A dumb accumulator -- the engine has no opinion on how these
-        seconds were measured (no Discord integration, no mic access exist
-        in this project). Whatever calls this decides that."""
-        if seconds <= 0:
-            return
-        self.player(player_id)  # raises KeyError for an unknown id
-        self.speaking_seconds[player_id] = self.speaking_seconds.get(player_id, 0.0) + seconds
-
     def public_votes(self) -> Dict[str, str]:
         return dict(self.votes)
 
@@ -603,7 +604,6 @@ class Game:
             "ledger": {
                 "votes": list(self.vote_history),
                 "losing_side_counts": dict(self.losing_side_counts),
-                "speaking_seconds": dict(self.speaking_seconds),
             },
         }
         if effective_faction(me) == Faction.HAND:
@@ -612,6 +612,7 @@ class Game:
             base["hand_target_id"] = self.hand_target_id
             base["hand_target_name"] = self.player(self.hand_target_id).name if self.hand_target_id else None
             base["recruitment_used"] = self.recruitment_used
+            base["recruitment_enabled"] = self.config.recruitment_enabled
         if self.phase == Phase.NIGHT:
             required = self.required_night_actor_ids()
             hand_alive_exists = any(effective_faction(p) == Faction.HAND for p in self.alive_players())
