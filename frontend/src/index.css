@@ -400,9 +400,16 @@ input:focus {
 /* Buttons are chrome, not paper: a line on the room, not a filled block.
    "Selected" is the one exception -- an ink stamp, filled and solid,
    because a chosen answer is a committed mark, not a hover state. */
+/* color: inherit, not a hardcoded value: a button's correct text color
+   depends entirely on what it's sitting on. --paper reads fine directly
+   on --room, but a button inside a .card or a table-faction .letter
+   sits on --paper, where --paper text is invisible. Inheriting from
+   whatever ancestor already set the right color (body: paper on room,
+   .card/.letter-table: ink on paper) fixes every context at once
+   instead of special-casing each one. */
 button {
   background: transparent;
-  color: var(--paper);
+  color: inherit;
   border: 1px solid var(--ink-faint);
   border-radius: 0;
   padding: var(--space-1-t) var(--space-2-t);
@@ -423,13 +430,34 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* --ink-faint above is correct on --room (a dim light tone against dark
+   ground) but reads as paper-on-paper, the same invisibility bug, on a
+   card or letter. --ink-quiet is the muted tone already used for .muted
+   text in those same paper contexts. */
+.card button:disabled,
+.letter-table button:disabled {
+  color: var(--ink-quiet);
+}
+
 button.primary {
   border-color: var(--paper-edge);
 }
 
+.card button.primary,
+.letter-table button.primary {
+  border-color: var(--ink-quiet);
+}
+
+/* Dims whatever the correctly-inherited color already is, rather than
+   hardcoding one tone that only reads right in one of the two contexts. */
 button.ghost {
-  color: var(--ink-quiet);
+  opacity: 0.65;
   border-color: var(--ink-faint);
+}
+
+.card button.ghost,
+.letter-table button.ghost {
+  border-color: var(--ink-quiet);
 }
 
 button.selected {
