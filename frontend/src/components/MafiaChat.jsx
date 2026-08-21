@@ -26,7 +26,7 @@ export default function MafiaChat({ messages, onSend }) {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
         />
-        <button className="primary" onClick={submit}>
+        <button type="button" className="primary" onClick={submit}>
           Send
         </button>
       </div>

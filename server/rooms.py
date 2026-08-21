@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 
 from fastapi import WebSocket
 
-from engine import ActionType, Game, GameConfig, Phase, Role
+from engine import Game, Phase, Role
 
 DEFAULT_DISCUSSION_SECONDS = 60
 # Section 6.8: The Table runs "45 seconds or all voted," a fixed number,

@@ -16,7 +16,6 @@ import { ROLE_INFO, roleLabel } from "./roles";
 import {
   clockTick,
   crossfadeBedTo,
-  isSoundEnabled,
   penStroke,
   phaseChange,
   reconcileDeadCount,
@@ -98,6 +97,10 @@ export default function App() {
     if (!seatOrderRef.current) {
       seatOrderRef.current = state.players.map((p) => p.id);
     }
+    // Deliberately narrow: only phase and the players array should
+    // retrigger this, not every field in state (votes, timers, and so
+    // on change far more often and none of them matter here).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.phase, state?.players]);
 
   // The Crossing (section 6.7) is a fixed 3 second beat with no engine
@@ -114,6 +117,9 @@ export default function App() {
       const t = setTimeout(() => setShowCrossing(false), 3000);
       return () => clearTimeout(t);
     }
+    // Deliberately narrow to phase: this only cares about the
+    // day_discussion -> voting transition, not every state broadcast.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.phase]);
 
   const isDead = !!state && state.phase !== "lobby" && state.phase !== "game_over" && !state.your_alive;
@@ -154,6 +160,9 @@ export default function App() {
       // somewhere meaningful instead of staying wherever focus was before.
       mainRef.current?.focus();
     }
+    // Deliberately narrow to phase: this must fire once per real phase
+    // transition, not on every state broadcast within the same phase.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.phase]);
 
   // Death, section 4.10: driven by the server's own dead count, not by
@@ -162,6 +171,9 @@ export default function App() {
   useEffect(() => {
     if (!state) return;
     reconcileDeadCount(state.players.filter((p) => !p.alive).length);
+    // Deliberately narrow to players: only the roster's alive/dead
+    // status matters here, not every other field in state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.players]);
 
   useEffect(() => {
@@ -177,6 +189,9 @@ export default function App() {
       lastTick.current = timer.secondsLeft;
       clockTick();
     }
+    // Deliberately narrow to secondsLeft: the tick fires once per real
+    // second-change, not on every unrelated timer field update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timer?.secondsLeft]);
 
   const toggleSound = () => {
@@ -201,6 +216,7 @@ export default function App() {
             onChange={(e) => setName(e.target.value)}
           />
           <button
+            type="button"
             className="primary"
             disabled={!connected || !name.trim()}
             onClick={() => {
@@ -218,6 +234,7 @@ export default function App() {
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
             />
             <button
+              type="button"
               className="primary"
               disabled={!connected || !name.trim() || joinCode.length !== 4}
               onClick={() => {
@@ -290,7 +307,7 @@ export default function App() {
             state.phase !== "day_discussion" && (
               <Timer seconds={timer.secondsLeft} total={timer.totalSeconds} phase={timer.phase} />
             )}
-          <button className="sound-toggle" onClick={toggleSound}>
+          <button type="button" className="sound-toggle" onClick={toggleSound}>
             {soundOn ? "Sound On" : "Sound Off"}
           </button>
         </div>

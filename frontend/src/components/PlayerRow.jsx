@@ -27,7 +27,7 @@ export default function PlayerRow({ name, onClick, selected, tag, disabled, offl
   }
 
   return (
-    <button className={classes} onClick={onClick} disabled={disabled}>
+    <button type="button" className={classes} onClick={onClick} disabled={disabled}>
       {content}
     </button>
   );

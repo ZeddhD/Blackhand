@@ -40,6 +40,7 @@ export default function RoleConfig({ roleCounts, setRoleCounts, playerCount, rea
           <label>{roleLabel(role)}</label>
           <div className="row-controls">
             <button
+              type="button"
               onClick={() =>
                 setRoleCounts((r) => ({ ...r, [role]: Math.max(0, (r[role] || 0) - 1) }))
               }
@@ -47,7 +48,10 @@ export default function RoleConfig({ roleCounts, setRoleCounts, playerCount, rea
               -
             </button>
             <span>{roleCounts[role] || 0}</span>
-            <button onClick={() => setRoleCounts((r) => ({ ...r, [role]: (r[role] || 0) + 1 }))}>
+            <button
+              type="button"
+              onClick={() => setRoleCounts((r) => ({ ...r, [role]: (r[role] || 0) + 1 }))}
+            >
               +
             </button>
           </div>

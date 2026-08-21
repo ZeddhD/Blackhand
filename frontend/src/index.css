@@ -214,7 +214,8 @@ body {
   .motion-placed,
   .motion-unfolded,
   .motion-taken,
-  .letter {
+  .letter,
+  .card {
     animation: none;
   }
   .motion-stamped {
@@ -224,6 +225,9 @@ body {
 
 /* -- Paper: a surface holding information a player earned. --------------- */
 
+/* Every surface in this game is placed, stamped, unfolded, or taken,
+   never a fade (section 4.7). .card had no arrival motion at all until
+   now, the "placed" verb existed as a utility class with zero users. */
 .card {
   background: var(--paper);
   color: var(--ink);
@@ -231,6 +235,7 @@ body {
   padding: var(--space-3-t) var(--space-2-t);
   width: 100%;
   box-shadow: 2px 2px var(--room);
+  animation: bh-placed var(--motion-duration) var(--ease-soft) both;
 }
 
 .card .muted {
@@ -312,12 +317,11 @@ body {
   letter-spacing: 0.1em;
 }
 
+/* .title is only ever used for The Reading's win/loss line now (the
+   title screen uses the stacked mark instead, and nothing else claims
+   it), which is exactly what --t-verdict, the largest rung of the type
+   scale, was defined for and had never actually been used anywhere. */
 .title {
-  font-family: var(--face-hand);
-  font-weight: 600;
-  font-size: 44px;
-  line-height: 1;
-  letter-spacing: -0.02em;
   color: var(--paper);
   margin: 0.2em 0;
 }
@@ -330,11 +334,6 @@ body {
 .mark-lockup {
   display: flex;
   color: var(--paper);
-}
-
-/* The mark sits on --paper (a card) here instead of --room: ink, not paper. */
-.mark-on-paper {
-  color: var(--ink);
 }
 
 .mark-lockup-stacked {
@@ -423,6 +422,15 @@ button {
 
 button:hover:not(:disabled) {
   border-color: var(--paper-edge);
+}
+
+/* --paper-edge above is a light tone, visible as hover feedback against
+   --room, but nearly the same shade as the paper it's sitting on inside
+   a card or letter, the same context-blind pattern already fixed twice
+   over for buttons in this file. */
+.card button:hover:not(:disabled),
+.letter-table button:hover:not(:disabled) {
+  border-color: var(--ink-quiet);
 }
 
 button:disabled {
@@ -986,6 +994,14 @@ button.selected {
   margin-top: var(--space-2-t);
   padding-top: var(--space-2-t);
   border-top: 1px solid var(--ink-faint);
+}
+
+/* --ink-faint (the base rule above) reads correctly as a quiet divider
+   where RoundLog sits directly on --room (The Reading), but DeadPanel
+   wraps it in a .card, where the same light tone is nearly invisible on
+   paper, the same paper-context issue already fixed for buttons. */
+.card .round-log {
+  border-top-color: var(--ink-quiet);
 }
 
 .round-log-entry {

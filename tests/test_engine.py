@@ -102,8 +102,6 @@ def test_watchman_self_heal_allowed_once_then_blocked():
     game = make_game(role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
     game.start_game()
     watchman = by_role(game, Role.WATCHMAN)[0]
-    hand = by_role(game, Role.HAND)[0]
-    other = next(p for p in game.players if p.id not in (watchman.id, hand.id))
 
     game.submit_night_action(watchman.id, ActionType.PROTECT, watchman.id)
     game.resolve_night()
