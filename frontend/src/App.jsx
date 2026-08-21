@@ -3,6 +3,7 @@ import { useGameSocket } from "./useGameSocket";
 import Letter from "./components/Letter";
 import MafiaChat from "./components/MafiaChat";
 import Mark, { HandGlyph } from "./components/Mark";
+import HowToPlay from "./components/HowToPlay";
 import Timer from "./components/Timer";
 import PlayerRow from "./components/PlayerRow";
 import Room from "./phases/Room";
@@ -15,7 +16,7 @@ import Delivery from "./phases/Delivery";
 import FirstLight from "./phases/FirstLight";
 import Reading from "./phases/Reading";
 import RoundLog from "./components/RoundLog";
-import { ROLE_INFO, roleLabel } from "./roles";
+import { roleLabel } from "./roles";
 import {
   clockTick,
   crossfadeBedTo,
@@ -292,7 +293,7 @@ export default function App() {
           </div>
         </div>
         {error && <p className="error">{error}</p>}
-        <RoleExplainer />
+        <HowToPlay />
       </div>
     );
   }
@@ -490,21 +491,6 @@ export default function App() {
     </div>
   );
 }
-
-function RoleExplainer() {
-  return (
-    <div className="card role-explainer">
-      <h2>Roles</h2>
-      {Object.values(ROLE_INFO).map((r) => (
-        <div key={r.key} className="role-explainer-item">
-          <p className="role-explainer-name">{r.label}</p>
-          <p className="muted">{r.text}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 
 const ACTION_TITLE = {
   kill: "Choose someone to kill",

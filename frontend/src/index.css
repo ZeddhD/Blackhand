@@ -610,21 +610,21 @@ button.selected {
   width: 36px;
 }
 
-.role-explainer-item {
-  margin-bottom: var(--space-2-t);
+/* -- How to Play (title screen): a stack of tap-to-unfold letters, same
+   grammar as the Waiting Room's own SettingLetter, so the interaction is
+   already familiar the moment a new player reaches the lobby. --------- */
+
+.how-to-play {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2-t);
 }
 
-.role-explainer-item:last-child {
-  margin-bottom: 0;
-}
-
-.role-explainer-name {
-  font-family: var(--face-rec);
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin: 0 0 2px;
+.how-to-play-line + .how-to-play-line {
+  margin-top: var(--space-1-t);
 }
 
 /* -- The Dark: dimmed, quiet, no lamp except the one who must act. -------- */
