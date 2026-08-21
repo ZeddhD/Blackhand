@@ -581,7 +581,10 @@ button.selected {
   flex: 1;
 }
 
-.role-config button {
+/* Scoped to .row specifically: these are the +/- steppers. The Auto
+   button sits outside any .row and needs its own full word to fit,
+   this rule was clipping "Auto" down to a 36px box before. */
+.role-config .row button {
   width: 36px;
 }
 
