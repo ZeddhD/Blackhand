@@ -16,6 +16,12 @@ Decided ambiguities -- see README.md for rationale:
     once, so there is nothing to tie-break. Tied lynch votes -> no lynch.
   - Recruitment: protection neither blocks the offer nor saves a refuser.
     A protected refuser surviving would leak the mechanic (section 2.3).
+  - Recruitment is only available while the Black Hand is down to exactly
+    one living original member, and locks out entirely once 3 or fewer
+    players remain alive in total. A Black Hand that starts with one Hand
+    can offer from the first night; one that starts with more has to lose
+    every member but one first. This is a deliberate design decision made
+    after the original 15-phase build, not part of BLACKHAND.md itself.
 """
 from __future__ import annotations
 
@@ -315,6 +321,17 @@ class Game:
                 raise IllegalActionError("Only the Black Hand can make an offer")
             if self.recruitment_used:
                 raise IllegalActionError("The Black Hand has already made its one offer this game")
+            # The Offer is a last-member's move, not a standing option: a
+            # Black Hand that started with more than one member can't
+            # recruit until it's down to its last living original Hand
+            # (a game that starts with only one Hand satisfies this from
+            # the first night). It also locks out once so few players
+            # remain that a recruit could swing the game outright.
+            hand_alive = [p for p in self.alive_players() if effective_faction(p) == Faction.HAND]
+            if len(hand_alive) != 1:
+                raise IllegalActionError("The Black Hand can only recruit down to its last living member")
+            if len(self.alive_players()) <= 3:
+                raise IllegalActionError("Too few players remain for the Black Hand to recruit")
             if effective_faction(target) == Faction.HAND:
                 raise IllegalActionError("Cannot offer to a member of the Black Hand")
             self.hand_action_mode = "offer"

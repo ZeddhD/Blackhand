@@ -1734,3 +1734,63 @@ session) doesn't mistake silence there for it being current.
   frontend still has no Show Your Hands UI, and nothing in this entire
   project has been confirmed to actually work by a human looking at or
   listening to a browser yet.
+
+## Post-launch design changes (after the original 15-phase plan)
+
+The 15 phases above cover the original `BLACKHAND.md` build. Once the
+game was live and being played, the user made further deliberate design
+decisions not part of that original document. Logged here for the same
+reason every phase above is: so a future session doesn't mistake a real
+decision for an oversight.
+
+### Recruitment eligibility tightened (engine/game.py)
+
+**The change:** the Offer can now only be submitted when the Black Hand
+is down to exactly one living original member, and locks out entirely
+once 3 or fewer players remain alive in total.
+
+- A game that starts with a single Hand can offer from night one (the
+  "exactly one living Hand" condition is already true from the start).
+- A game that starts with 2 or more Hands cannot recruit at all until
+  attrition brings it down to exactly 1 living original Hand, no matter
+  how many started. Losing one Hand out of three (down to 2) does not
+  unlock it; only reaching the last one does.
+- Regardless of Hand count, recruitment locks out once total living
+  players drops to 3 or fewer, permanently, for the rest of the game.
+
+**Why:** confirmed directly with the user rather than inferred. The
+practical effect is that recruitment can no longer be used as a
+razor's-edge endgame swing move (the population it would need to
+instantly decide the game is exactly the population where it's now
+locked out), and a multi-Hand team can't lean on it as a standing option
+the way a single-Hand team can.
+
+**Implementation:** two new checks inside `submit_night_action`'s
+`ActionType.OFFER` branch, alongside the existing "already used" and
+"can't target a Hand" checks: count living Hands via `effective_faction`
+(not literal role, consistent with every other faction check in the
+engine) and require exactly 1; count total living players and require
+more than 3. Documented in the module's own "Decided ambiguities"
+docstring alongside the original Recruitment rules.
+
+**Test impact:** broke 3 existing tests that used a 3-Hand start to set
+up parity math for Offer outcomes, since a 3-Hand game can no longer
+recruit until down to its last member. Fixed by rebuilding those
+scenarios around a 1-Hand start with two preliminary kill-and-advance
+rounds to thin the table to a population where recruiting is both legal
+and (for the acceptance case) still reaches instant parity. The refusal
+case can no longer reach instant parity at all under the new rule by
+construction (the population that would need is exactly the population
+where recruitment is now locked out), so that test's assertions changed
+from "the game ends" to "the outcome is still recorded correctly, and
+`view_for` correctly omits `offer_outcome`/`role_reveal` since the game
+hasn't reached game over." Added 6 new tests covering the rule directly:
+blocked at 2+ Hands alive, unlocked at exactly 1, still blocked after
+losing one of three Hands (must reach exactly one, not just fewer than
+the start), legal immediately with a 1-Hand start, blocked at 3 total
+players alive, legal at exactly 4. 92 tests total now, all passing.
+
+**No frontend changes needed.** The Offer has no send-side UI yet (a
+Hand player has no way to choose "offer" over "kill" from the browser at
+all, per Phase 12's own notes), so this is a pure engine-correctness
+change with nothing to wire up until that UI exists.
