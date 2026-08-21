@@ -75,6 +75,10 @@ class Game:
     hand_target_actor_id: Optional[str] = None
     recruitment_used: bool = False  # the Black Hand gets at most one offer per game, ever
     _offer_recipient_id: Optional[str] = None
+    # Permanent record of the one offer's outcome, for The Reading (section
+    # 6.11): None if no offer was ever made, otherwise set once in
+    # _resolve_offer and never cleared again for the rest of the game.
+    offer_outcome: Optional[dict] = None
 
     show_hands_votes: Dict[str, str] = field(default_factory=dict)
     show_hands_count: int = 0
@@ -154,6 +158,7 @@ class Game:
         self.hand_target_actor_id = None
         self.recruitment_used = False
         self._offer_recipient_id = None
+        self.offer_outcome = None
         self.show_hands_votes.clear()
         self.show_hands_count = 0
         self.vote_history.clear()
@@ -409,6 +414,12 @@ class Game:
         self._resolve_offer(accepted=False)
 
     def _resolve_offer(self, accepted: bool) -> None:
+        recipient = self.player(self._offer_recipient_id)
+        self.offer_outcome = {
+            "recipient_name": recipient.name,
+            "night": self.night_number,
+            "accepted": accepted,
+        }
         lines: List[str] = []
         resolution.resolve_offer_response(self, accepted, lines)
         resolution.resolve_investigations(self, lines)
@@ -589,4 +600,14 @@ class Game:
             base["round_log"] = list(self.round_log)
         if self.phase == Phase.GAME_OVER:
             base["hand_reveal"] = [p.name for p in self.players if effective_faction(p) == Faction.HAND]
+            # The Reading (section 6.11): every role revealed, and whether a
+            # Hand started that way or was Marked later, a distinct fact the
+            # document says is worth preserving. Role here is the literal,
+            # original assignment -- it never changes on recruitment, only
+            # marked does (see effective_faction).
+            base["role_reveal"] = [
+                {"id": p.id, "name": p.name, "role": p.role.value if p.role else None, "marked": p.marked}
+                for p in self.players
+            ]
+            base["offer_outcome"] = dict(self.offer_outcome) if self.offer_outcome else None
         return base

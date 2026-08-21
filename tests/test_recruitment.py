@@ -140,6 +140,61 @@ def test_marked_player_counts_for_parity_immediately():
     assert game.winner == Faction.HAND
 
 
+def test_offer_outcome_recorded_on_acceptance_and_visible_at_game_over():
+    game = make_offer_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    hand = by_role(game, Role.HAND)[0]
+    recruit = next(p for p in game.players if p.role is not Role.HAND)
+    game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
+    game.resolve_night()
+    game.respond_to_offer(recruit.id, accepted=True)
+    assert game.phase == Phase.GAME_OVER
+
+    assert game.offer_outcome == {
+        "recipient_name": recruit.name,
+        "night": 1,
+        "accepted": True,
+    }
+    view = game.view_for(hand.id)
+    assert view["offer_outcome"] == game.offer_outcome
+    reveal_by_id = {r["id"]: r for r in view["role_reveal"]}
+    assert reveal_by_id[recruit.id]["marked"] is True
+    # literal role in the reveal is still the original assignment, not "hand"
+    assert reveal_by_id[recruit.id]["role"] != Role.HAND.value
+
+
+def test_offer_outcome_recorded_on_refusal_and_visible_at_game_over():
+    game = make_offer_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    hand = by_role(game, Role.HAND)[0]
+    recruit = next(p for p in game.players if p.role is not Role.HAND)
+    game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
+    game.resolve_night()
+    game.respond_to_offer(recruit.id, accepted=False)
+    assert game.phase == Phase.GAME_OVER  # the refusal death brings the Hand to parity
+
+    assert game.offer_outcome == {
+        "recipient_name": recruit.name,
+        "night": 1,
+        "accepted": False,
+    }
+    view = game.view_for(hand.id)
+    assert view["offer_outcome"]["accepted"] is False
+    reveal_by_id = {r["id"]: r for r in view["role_reveal"]}
+    assert reveal_by_id[recruit.id]["marked"] is False
+
+
+def test_offer_outcome_is_none_when_no_offer_was_ever_made():
+    game = make_offer_game(names=["A", "B", "C"], role_counts={Role.HAND: 1})
+    hand = by_role(game, Role.HAND)[0]
+    victim = next(p for p in game.players if p.role is not Role.HAND)
+    game.submit_night_action(hand.id, ActionType.KILL, victim.id)
+    game.resolve_night()
+    assert game.phase == Phase.GAME_OVER  # the kill brings the Hand to parity too
+    assert game.offer_outcome is None
+    view = game.view_for(hand.id)
+    assert view["offer_outcome"] is None
+    assert isinstance(view["role_reveal"], list) and len(view["role_reveal"]) == 3
+
+
 def test_marked_players_other_state_is_left_untouched():
     # No Ledger exists yet (Phase 4), so this verifies the one thing that
     # currently could be disturbed: identity and pre-existing state. Full
