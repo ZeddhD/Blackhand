@@ -66,6 +66,7 @@ export default function App() {
   const [name, setName] = useState("");
   const [joinCode, setJoinCode] = useState(codeFromUrl());
   const [selectedTarget, setSelectedTarget] = useState(null);
+  const [handMode, setHandMode] = useState(null);
   const [soundOn, setSoundOn] = useState(true);
   const [announcement, setAnnouncement] = useState("");
 
@@ -78,6 +79,7 @@ export default function App() {
 
   useEffect(() => {
     setSelectedTarget(null);
+    setHandMode(null);
   }, [state?.phase, state?.night_number]);
 
   useEffect(() => {
@@ -327,6 +329,8 @@ export default function App() {
           state={state}
           others={others}
           isHandFaction={isHandFaction}
+          handMode={handMode}
+          setHandMode={setHandMode}
           selectedTarget={selectedTarget}
           setSelectedTarget={setSelectedTarget}
           nightAction={nightAction}
@@ -374,21 +378,27 @@ function RoleExplainer() {
 
 const ACTION_TITLE = {
   kill: "Choose someone to kill",
+  offer: "Choose someone to offer",
   protect: "Choose someone to protect",
   investigate: "Choose someone to investigate",
 };
 
-function NightPanel({ state, others, isHandFaction, selectedTarget, setSelectedTarget, nightAction }) {
+function NightPanel({ state, others, isHandFaction, handMode, setHandMode, selectedTarget, setSelectedTarget, nightAction }) {
   // A Marked player's literal role never changes, only effective faction
   // does (engine/models.py's effective_faction), so this checks that, not
   // state.your_role directly -- a recruit who accepted the Offer must see
   // the Hand's kill target UI on every night after, not "STAY SILENT."
-  // Hand's night action defaults to a kill target here; choosing the Offer
-  // instead (section 2.3) has no UI yet, that's the sender's side of this
-  // same beat and still has no control -- the Offer screen itself (this
-  // phase) only builds the recipient's side.
+  //
+  // A Hand chooses between kill and offer (section 2.3). Eligibility for
+  // offer (down to the Black Hand's last living member, more than 3
+  // players alive, not already used this game) is deliberately not
+  // recomputed here: the engine is the one place that rule lives, and
+  // submit_night_action already rejects an ineligible attempt with a
+  // real reason, shown through the existing error banner. Duplicating
+  // that logic client-side would just be a second copy to keep in sync.
+  const effectiveHandMode = handMode || state.hand_action_mode || "kill";
   const actionType = isHandFaction
-    ? "kill"
+    ? effectiveHandMode
     : state.your_role === "watchman"
       ? "protect"
       : state.your_role === "inspector"
@@ -412,7 +422,15 @@ function NightPanel({ state, others, isHandFaction, selectedTarget, setSelectedT
     );
   }
 
-  const targets = actionType === "protect" ? state.players.filter((p) => p.alive) : others.filter((p) => p.alive);
+  let targets = actionType === "protect" ? state.players.filter((p) => p.alive) : others.filter((p) => p.alive);
+  if (actionType === "offer") {
+    // The engine rejects offering a Black Hand member outright; filtering
+    // teammates out of the list here just keeps an obviously-invalid
+    // choice from ever looking clickable. Best-effort by name, since
+    // allies is a name list, not ids -- the server is still the real check.
+    const allyNames = new Set(state.allies || []);
+    targets = targets.filter((p) => !allyNames.has(p.name));
+  }
   const selectedId = isHandFaction ? state.hand_target_id : selectedTarget;
 
   return (
@@ -420,6 +438,24 @@ function NightPanel({ state, others, isHandFaction, selectedTarget, setSelectedT
       <div className="silent-banner compact">
         <p className="silent-banner-text">STAY SILENT</p>
       </div>
+      {isHandFaction && !state.recruitment_used && (
+        <div className="row">
+          <button
+            type="button"
+            className={effectiveHandMode === "kill" ? "selected" : "ghost"}
+            onClick={() => setHandMode("kill")}
+          >
+            Kill
+          </button>
+          <button
+            type="button"
+            className={effectiveHandMode === "offer" ? "selected" : "ghost"}
+            onClick={() => setHandMode("offer")}
+          >
+            Offer
+          </button>
+        </div>
+      )}
       <h2>{ACTION_TITLE[actionType]}</h2>
       {isHandFaction && (
         <p className="muted">
