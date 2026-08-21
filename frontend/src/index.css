@@ -622,6 +622,70 @@ button.selected {
   margin: var(--space-1-t) 0 0;
 }
 
+/* -- The Room (section 6.6). A vertical feed, loose and scrollable: the
+   one phase the interface deliberately gets out of the way for. Spacing
+   is entirely the tension-scaled tokens, nothing fixed. -------------------- */
+
+.room-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2-t);
+  width: 100%;
+}
+
+.room-feed-timer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.room-feed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2-t);
+}
+
+/* -- Accretion marks (section 6.12). Raw counts and a bar, never a score,
+   never removed. Directional-toward-seat marks need seat angles, which
+   don't exist until The Crossing (Phase 10) assigns them, so votes cast
+   render as a count for now, not a compass heading. ----------------------- */
+
+.marks {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1-t);
+  margin-top: var(--space-1-t);
+}
+
+.mark {
+  font-family: var(--face-rec);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-quiet);
+  font-variant-numeric: tabular-nums;
+}
+
+.mark-dead {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.mark-bar {
+  display: inline-block;
+  width: 40px;
+  height: 4px;
+  background: var(--ink-faint);
+}
+
+.mark-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--ink-quiet);
+}
+
 /* -- The Ledger: the record, always mono. --------------------------------- */
 
 .round-log {

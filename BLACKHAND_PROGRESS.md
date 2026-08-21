@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 8 complete. Phase 9 not started.**
+**Current status: Phase 9 complete. Phase 10 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -851,4 +851,95 @@ committed. Said here rather than implied by silence.
   Phases 6 and 7: Show Your Hands and Offer still have no interactive
   UI.
 
-## Phases 9 through 15: not started
+## Phase 9: The Room (done)
+
+**Files touched:** `frontend/src/phases/Room.jsx` (new, first file in a new
+`frontend/src/phases/` directory, the location the build plan specifies
+for beat components from here on), `frontend/src/index.css`
+(`.room-feed`/`.room-feed-timer`/`.room-feed-list`/`.marks`/`.mark`/
+`.mark-bar` rules), `frontend/src/App.jsx` (the old inline
+`day_discussion` block replaced with `<Room>`, and the shared header
+timer now skips rendering during `day_discussion` since Room owns its
+own).
+
+**Room.jsx replaces the pre-Blackhand discussion screen's plain
+`PlayerRow` roster with a vertical column of `Letter`s**, one per player,
+each carrying that player's accumulated marks, per section 6.6's literal
+"player letters in a column." Living and dead players both appear (a
+dead player's mark for eliminated is part of the same accretion strip,
+not a separate panel), consistent with 6.12's "player letters start
+blank and are never cleaned."
+
+**Accretion marks (section 6.12) are computed live from the real Ledger
+data already built in Phase 4**, not placeholders: votes cast, votes
+received, stand asides, and times on the losing side of a lynch all come
+straight from `state.ledger.votes` and `state.ledger.losing_side_counts`.
+Verified live against a running 7-player game that `state.ledger`
+actually reaches the client with the exact shape `Room.jsx` expects
+(`votes: []`, `losing_side_counts: {}`, `speaking_seconds: {}` this
+early in a fresh game, all populated once real play generates them,
+confirmed both by this run and by reading `submit_vote()`'s literal dict
+shape in `engine/game.py`).
+
+**One mark in the spec's list is intentionally approximated, said
+outright rather than faked:** "votes cast, as directional marks toward
+the target's seat position" needs a seat angle for every player, and
+seats do not exist until The Crossing assigns them (Phase 10, which
+hasn't run yet at this point in the round). Votes cast render as a plain
+count (`→3`) instead of a compass-style mark toward a seat. This will
+become literal once Phase 10 exists and a real seat layout can be passed
+down.
+
+**Speaking time renders as a filled bar already**, per section 6.12's
+"filled bar" instruction, scaled against the current discussion timer's
+total duration, but will read as empty for every player until some
+phase actually calls `record_speaking_time` from a live measurement
+source, which per Phase 4's notes is still an explicitly open decision
+(no Discord integration, no mic access anywhere in this project).
+
+**The Room's own Timer, not the shared header one, satisfies "top right,
+quiet until 10 seconds remain, then lamp":** `Room.jsx` now renders its
+own `<Timer>` at the top of its feed, reusing the exact `Timer.jsx`
+component and `colorFor()` threshold Phase 6 already built
+(`seconds <= 10 ? var(--lamp) : var(--ink-quiet)`), and `App.jsx`'s
+shared header timer was given one extra condition
+(`state.phase !== "day_discussion"`) so the countdown isn't shown twice.
+"Audible" (the ticking sound) is Phase 11's job; nothing in this project
+plays sound yet.
+
+**Spacing responds to `--tension` because it uses the same tension-scaled
+tokens every other phase already uses**, not a new mechanism: `.room-feed`
+and `.room-feed-list` both gap on `var(--space-2-t)`. No new tension
+wiring was needed or added; this was true by using the existing system
+correctly, which is itself worth confirming rather than assuming.
+
+**Acceptance criteria:**
+- Vertical feed, scrollable: confirmed structurally. The whole app is a
+  normally-scrolling page (`#root` has no `overflow: hidden` anywhere),
+  and `Room.jsx` adds no fixed-height or scroll-trapping container of its
+  own, so this is true by not fighting the page's default behavior.
+- Player letters carry marks: confirmed live, using real Ledger data
+  reaching the client in the exact shape expected, verified via a live
+  7-player run, not just a build check.
+- Timer goes lamp and audible at exactly 10 seconds: the lamp threshold
+  is exact (reusing Phase 6's already-correct `Timer.jsx`), confirmed
+  present in `Room.jsx`'s own render tree rather than only the shared
+  header. Audible is not yet true, Phase 11 owns sound entirely and
+  nothing in this codebase plays audio yet, said here rather than
+  claimed.
+- Spacing responds to `--tension`: confirmed, `.room-feed`/
+  `.room-feed-list` use the tension-scaled spacing tokens.
+- `npm run build` succeeds. `tests/` still 79/79 (no engine changes this
+  phase). Zero em dashes, confirmed by grep.
+
+**Deliberately not done in Phase 9:**
+- Directional (seat-position) vote marks: plain counts for now, per
+  above, until Phase 10 gives seats an angle to point toward.
+- Sound (the audible tick at 10 seconds, ambient bed): Phase 11.
+- No live speaking-time source exists yet to actually fill the speaking
+  bar, consistent with the Phase 4 gap.
+- **Not pushed**, per the confirmed policy. Same standing gap as
+  Phases 6 through 8: Show Your Hands and Offer still have no
+  interactive UI.
+
+## Phases 10 through 15: not started
