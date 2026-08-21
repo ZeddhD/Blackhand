@@ -7,6 +7,8 @@ import RoleConfig from "./components/RoleConfig";
 import Timer from "./components/Timer";
 import PlayerRow from "./components/PlayerRow";
 import Room from "./phases/Room";
+import Crossing from "./phases/Crossing";
+import Table from "./phases/Table";
 import { ROLE_INFO, roleLabel } from "./roles";
 import {
   isSoundEnabled,
@@ -20,9 +22,6 @@ import {
   setSoundEnabled,
   unlockAudio,
 } from "./sound";
-
-// Must match engine.game.SKIP_VOTE exactly -- not a real player id.
-const SKIP_VOTE = "skip";
 
 function codeFromUrl() {
   const path = window.location.pathname.replace(/\//g, "");
@@ -75,6 +74,9 @@ export default function App() {
   const lastTick = useRef(null);
   const prevAlive = useRef({});
   const mainRef = useRef(null);
+  const seatOrderRef = useRef(null);
+  const prevPhaseForCrossing = useRef(null);
+  const [showCrossing, setShowCrossing] = useState(false);
 
   useEffect(() => {
     setSelectedTarget(null);
@@ -82,6 +84,35 @@ export default function App() {
 
   useEffect(() => {
     document.body.dataset.phase = state?.phase || "title";
+  }, [state?.phase]);
+
+  // Seats never reorder (section 6.8): captured once from the first roster
+  // seen after the game starts, then reused for the rest of the game
+  // regardless of what order the server's own player list is in later.
+  useEffect(() => {
+    if (!state) return;
+    if (state.phase === "lobby") {
+      seatOrderRef.current = null;
+      return;
+    }
+    if (!seatOrderRef.current) {
+      seatOrderRef.current = state.players.map((p) => p.id);
+    }
+  }, [state?.phase, state?.players]);
+
+  // The Crossing (section 6.7) is a fixed 3 second beat with no engine
+  // phase of its own: the server moves straight from day_discussion to
+  // voting, so this is a client-side hold in front of the Table, timed
+  // independently of prevPhase below to avoid depending on effect order.
+  useEffect(() => {
+    if (!state) return;
+    const was = prevPhaseForCrossing.current;
+    prevPhaseForCrossing.current = state.phase;
+    if (state.phase === "voting" && was === "day_discussion") {
+      setShowCrossing(true);
+      const t = setTimeout(() => setShowCrossing(false), 3000);
+      return () => clearTimeout(t);
+    }
   }, [state?.phase]);
 
   const isDead = !!state && state.phase !== "lobby" && state.phase !== "game_over" && !state.your_alive;
@@ -188,6 +219,25 @@ export default function App() {
   const others = state.players.filter((p) => p.id !== playerId);
   const isHost = state.is_host === true;
 
+  // The Table takes over the entire screen: no topbar, no event log, no
+  // navigation reachable while it's up (section 6.8). The sr-only live
+  // region is duplicated here rather than restructured into, since it's
+  // an accessibility channel, not part of "the rest of the application."
+  if (!isDead && state.phase === "voting") {
+    return (
+      <>
+        <div className="sr-only" role="status" aria-live="polite">
+          {announcement}
+        </div>
+        {showCrossing ? (
+          <Crossing seatCount={(seatOrderRef.current || alivePlayers.map((p) => p.id)).length} />
+        ) : (
+          <Table state={state} seatOrder={seatOrderRef.current} playerId={playerId} timer={timer} vote={vote} />
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="screen">
       <header className="topbar">
@@ -255,39 +305,6 @@ export default function App() {
           timer={timer}
           discussionSeconds={timer?.phase === "day_discussion" ? timer.totalSeconds : undefined}
         />
-      )}
-
-      {!isDead && state.phase === "voting" && (
-        <div className="card">
-          <h2>Vote to Remove a Player</h2>
-          <p className="muted">
-            Voting ends when the timer runs out, or as soon as everyone has voted.
-          </p>
-          {state.votes_total != null && (
-            <p className="night-progress">
-              {state.votes_done} / {state.votes_total} players have voted
-            </p>
-          )}
-          <ul className="player-list">
-            {alivePlayers.map((p) => (
-              <li key={p.id}>
-                <PlayerRow
-                  name={p.name}
-                  selected={state.votes[playerId] === p.id}
-                  tag={state.votes[playerId] === p.id ? "YOUR VOTE" : null}
-                  offline={state.connected?.[p.id] === false}
-                  onClick={() => vote(p.id)}
-                />
-              </li>
-            ))}
-          </ul>
-          <button
-            className={state.votes[playerId] === SKIP_VOTE ? "selected" : "ghost"}
-            onClick={() => vote(SKIP_VOTE)}
-          >
-            Skip My Vote
-          </button>
-        </div>
       )}
 
       {state.phase === "game_over" && (

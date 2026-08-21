@@ -686,6 +686,206 @@ button.selected {
   background: var(--ink-quiet);
 }
 
+/* -- The Crossing (section 6.7) and The Table (section 6.8). Both take
+   over the whole screen: no topbar, no navigation, nothing else mounted
+   alongside them. Negative margins cancel #root's own padding so they
+   fill the viewport edge to edge instead of sitting inside it. -------- */
+
+.crossing,
+.table-screen {
+  margin: calc(-1 * var(--space-3-t)) calc(-1 * var(--space-2-t)) calc(-1 * var(--space-4-t));
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.crossing {
+  background: var(--room);
+}
+
+.crossing-mark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--paper);
+  opacity: 0;
+  animation: bh-crossing-mark-fade 3000ms ease-out both;
+}
+
+/* Visible for well under a second, per section 5.6: fades in around the
+   one-second mark of the three-second Crossing, holds briefly, gone. */
+@keyframes bh-crossing-mark-fade {
+  0%,
+  25% {
+    opacity: 0;
+  }
+  30%,
+  45% {
+    opacity: 0.4;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.crossing-ring {
+  position: relative;
+  width: min(100%, 360px);
+  aspect-ratio: 1;
+}
+
+/* No border-radius: seats are square marks, not circles, matching the
+   flat-edged rule that governs every other surface in this system. */
+.crossing-seat {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 0;
+  background: var(--paper);
+  animation: bh-crossing-seat 400ms var(--ease-soft) both;
+}
+
+/* A scaled-down "placed" entrance (section 4.7): the full 120px slide is
+   calibrated for a full paper surface, not a 10px ring mark, so this
+   uses a smaller offset rather than the literal figure. */
+@keyframes bh-crossing-seat {
+  from {
+    transform: translate(-50%, calc(-50% + 40px));
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%);
+    opacity: 1;
+  }
+}
+
+/* The Table inverts (section 4.9): ink ground, paper text, the only
+   Table-facing surface that looks like the Black Hand's own. */
+.table-screen {
+  background: var(--ink);
+  color: var(--paper);
+  padding: var(--space-4-t) var(--space-2-t);
+  gap: var(--space-3-t);
+}
+
+.table-ring-wrap {
+  position: relative;
+  width: min(100%, 360px);
+  aspect-ratio: 1;
+  margin: auto;
+}
+
+.table-ring {
+  position: absolute;
+  inset: 0;
+}
+
+.table-pulse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60%;
+  height: 60%;
+  transform: translate(-50%, -50%);
+  background: color-mix(in srgb, var(--paper) 8%, transparent);
+  animation: bh-table-pulse var(--pulse-duration, 3000ms) ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes bh-table-pulse {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.table-seat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: auto;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  color: var(--paper);
+  cursor: pointer;
+}
+
+.table-seat:disabled {
+  cursor: default;
+}
+
+.table-seat-name {
+  font-family: var(--face-rec);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.table-seat-selected .avatar {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.table-seat-empty {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 34px;
+  height: 34px;
+  border: 1px dashed color-mix(in srgb, var(--paper) 25%, var(--ink));
+}
+
+.table-seat-tally {
+  font-family: var(--face-rec);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 0 4px;
+}
+
+.stand-aside {
+  font-family: var(--face-rec);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--paper) 35%, var(--ink));
+  color: var(--paper);
+  width: auto;
+  padding: var(--space-1-t) var(--space-2-t);
+  margin: 0 auto;
+}
+
+.stand-aside-selected {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crossing-seat {
+    animation: none;
+    transform: translate(-50%, -50%);
+    opacity: 1;
+  }
+  .table-pulse {
+    animation: none;
+    opacity: 0.3;
+  }
+}
+
 /* -- The Ledger: the record, always mono. --------------------------------- */
 
 .round-log {
