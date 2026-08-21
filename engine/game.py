@@ -122,6 +122,14 @@ class Game:
             return
         if not player.alive:
             return
+        if self.phase == Phase.OFFER and player_id == self._offer_recipient_id:
+            # The generic path below would just mark them dead without
+            # ever resolving the offer, leaving the game stuck in
+            # Phase.OFFER forever. Treat a vanished recipient the same as
+            # a timeout -- they didn't answer, same as section 2.3's
+            # refusal-or-timeout rule.
+            self._resolve_offer(accepted=False)
+            return
         player.alive = False
         self.votes.pop(player_id, None)
         self.pending_actions.pop(player_id, None)

@@ -18,6 +18,12 @@ DEFAULT_VOTING_SECONDS = 60
 MIN_PHASE_SECONDS = 15
 MAX_PHASE_SECONDS = 600
 
+# Fixed durations, not host-configurable -- the document lists Show Your
+# Hands' threshold as configurable (section 7.1) but never its duration,
+# and the Offer's 30s is stated as part of the mechanic itself (section 2.3).
+SHOW_HANDS_SECONDS = 15
+OFFER_SECONDS = 30
+
 # A dropped connection isn't necessarily gone for good -- phones lock,
 # wifi blips. Give it a grace period to reconnect before treating it as a
 # real departure.
@@ -69,6 +75,11 @@ class Room:
         self.host_id = self.game.players[0].id if self.game.players else None
 
     def mafia_channel_ids(self) -> set:
+        # "The channel is disabled during Show Your Hands" (section 2.4) --
+        # nobody can read or send during this window, enforced by simply
+        # returning no recipients at all rather than a separate check.
+        if self.game.phase == Phase.SHOW_HANDS:
+            return set()
         return {p.id for p in self.game.hand_team()}
 
 
@@ -179,10 +190,26 @@ async def run_room(room: Room) -> None:
     game = room.game
     try:
         while game.phase != Phase.GAME_OVER:
+            if game.phase == Phase.SHOW_HANDS:
+                await _countdown(room, SHOW_HANDS_SECONDS)
+                game.resolve_show_hands()
+                await broadcast_state(room)
+                if game.phase == Phase.GAME_OVER:
+                    break
             if game.phase == Phase.NIGHT:
                 await _wait_for_night(room)
                 game.resolve_night()
                 await broadcast_state(room)
+                if game.phase == Phase.GAME_OVER:
+                    break
+            if game.phase == Phase.OFFER:
+                await _countdown(room, OFFER_SECONDS)
+                # A response may have already resolved this (and possibly
+                # ended the game) before the timer ran out -- only time it
+                # out ourselves if it's still genuinely unanswered.
+                if game.phase == Phase.OFFER:
+                    game.resolve_offer_timeout()
+                    await broadcast_state(room)
                 if game.phase == Phase.GAME_OVER:
                     break
             if game.phase == Phase.DAY_DISCUSSION:

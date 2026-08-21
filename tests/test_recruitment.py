@@ -274,3 +274,20 @@ def test_night_ends_on_offer_submission_alone_like_a_kill():
     assert not game.night_actions_ready()
     game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
     assert game.night_actions_ready()
+
+
+def test_recipient_disconnecting_during_offer_resolves_it_as_a_timeout():
+    # A vanished recipient must not leave the game stuck in Phase.OFFER
+    # forever -- the generic disconnect-removal path would just mark them
+    # dead without ever resolving the offer.
+    game = make_offer_game(names=["A", "B", "C", "D", "E"])
+    hand = by_role(game, Role.HAND)[0]
+    recruit = next(p for p in game.players if p.role is not Role.HAND)
+    game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
+    game.resolve_night()
+    assert game.phase == Phase.OFFER
+
+    game.handle_disconnect_removal(recruit.id)
+    assert game.phase != Phase.OFFER
+    assert not recruit.alive
+    assert recruit.marked is False
