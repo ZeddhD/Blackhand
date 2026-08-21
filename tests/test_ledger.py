@@ -3,8 +3,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 from engine import SKIP_VOTE, Game, GameConfig, Role
 
 
@@ -127,40 +125,16 @@ def test_no_losing_side_recorded_on_a_tied_vote():
     assert game.losing_side_counts == {}
 
 
-def test_speaking_time_accumulated_per_player():
-    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
-    a = game.players[0]
-    game.record_speaking_time(a.id, 4.5)
-    game.record_speaking_time(a.id, 2.0)
-    assert game.speaking_seconds[a.id] == 6.5
-
-
-def test_speaking_time_rejects_unknown_player():
-    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
-    with pytest.raises(KeyError):
-        game.record_speaking_time("nobody", 5.0)
-
-
-def test_speaking_time_ignores_non_positive_values():
-    game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
-    a = game.players[0]
-    game.record_speaking_time(a.id, 0)
-    game.record_speaking_time(a.id, -3)
-    assert a.id not in game.speaking_seconds
-
-
 def test_ledger_is_public_and_always_present_in_every_view():
     game = make_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1})
     to_voting(game)
     a, b = game.players[0], game.players[1]
     game.submit_vote(a.id, b.id)
-    game.record_speaking_time(a.id, 3.0)
 
     for p in game.players:
         view = game.view_for(p.id)
         assert "ledger" in view
         assert view["ledger"]["votes"] == game.vote_history
-        assert view["ledger"]["speaking_seconds"] == {a.id: 3.0}
 
 
 def test_ledger_survives_a_return_to_lobby_is_cleared_for_rematch():
@@ -174,7 +148,6 @@ def test_ledger_survives_a_return_to_lobby_is_cleared_for_rematch():
     game.return_to_lobby()
     assert game.vote_history == []
     assert game.losing_side_counts == {}
-    assert game.speaking_seconds == {}
 
 
 def test_no_scoring_or_ranking_function_exists_in_the_engine():

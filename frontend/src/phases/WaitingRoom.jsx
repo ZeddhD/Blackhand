@@ -75,6 +75,7 @@ export default function WaitingRoom({ state, isHost, onStart, onLeave, roomCode 
   const [discussion, setDiscussion] = useState(60);
   const [showHandsEnabled, setShowHandsEnabled] = useState(true);
   const [showHandsThreshold, setShowHandsThreshold] = useState(6);
+  const [recruitmentEnabled, setRecruitmentEnabled] = useState(true);
 
   const playerCount = state.players.length;
   const canStart = playerCount >= 6 && playerCount <= 12;
@@ -148,13 +149,38 @@ export default function WaitingRoom({ state, isHost, onStart, onLeave, roomCode 
         )}
       </SettingLetter>
 
+      <SettingLetter
+        label="Recruitment"
+        isHost={isHost}
+        summary={recruitmentEnabled ? "On" : "Off"}
+      >
+        <div className="row">
+          <label>Enabled</label>
+          <button
+            type="button"
+            className={recruitmentEnabled ? "selected" : "ghost"}
+            onClick={() => setRecruitmentEnabled((v) => !v)}
+          >
+            {recruitmentEnabled ? "On" : "Off"}
+          </button>
+        </div>
+        <p className="muted">
+          When off, the Black Hand can never make an offer this game, regardless of how few Hands remain.
+        </p>
+      </SettingLetter>
+
       {isHost ? (
         <button
           type="button"
           className="primary"
           disabled={!canStart}
           onClick={() =>
-            onStart(roleCounts, { discussion }, { enabled: showHandsEnabled, threshold: showHandsThreshold })
+            onStart(
+              roleCounts,
+              { discussion },
+              { enabled: showHandsEnabled, threshold: showHandsThreshold },
+              recruitmentEnabled
+            )
           }
         >
           Start Game

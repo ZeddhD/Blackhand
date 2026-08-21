@@ -137,6 +137,7 @@ async def ws_endpoint(websocket: WebSocket):
                     role_counts=role_counts,
                     show_hands_enabled=show_hands_enabled,
                     show_hands_threshold=show_hands_threshold,
+                    recruitment_enabled=bool(msg.get("recruitment_enabled", True)),
                 )
                 timers = msg.get("timers") or {}
 

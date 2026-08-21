@@ -1943,3 +1943,115 @@ confirmed a submitted `investigate` action is rejected with exactly the
 new error message, then confirmed the same connection's `kill` action on
 the same night is accepted and advances the game normally. Both linters
 (pyflakes, oxlint) clean.
+
+### A batch of remaining open-gap decisions, resolved and shipped together
+
+After a full audit of every "not built" / "deferred" / "unspecified"
+marker still standing across the codebase, six items were put to the
+user directly, each with concrete options, rather than picked
+unilaterally. All six landed in one pass since none of them touch each
+other's code.
+
+**Watchman toggle: left as-is.** Setting the Watchman's role count to 0
+in `RoleConfig` already fully disables the mechanic; a dedicated on/off
+switch would be a second way to do the same thing. Confirmed with the
+user as not worth building.
+
+**Ledger depth (full vs. "recent 3 rounds"): dropped.** Section 7.1
+named this setting but never defined what "recent" means. Confirmed
+with the user: full Ledger, always -- consistent with section 2.5's
+explicit "never summarized" stance, which a depth toggle would partly
+undercut anyway.
+
+**Waiting Room's "optional written line" prompt: dropped.** The only
+surviving text of this from the original `BLACKHAND.md` (which is no
+longer in this repo -- only fragments quoted in this file remain) is
+`"an optional written line... prompted here, never during a round"`,
+an ellipsis-truncated quote with real missing words. Rather than build
+a guess against a genuinely incomplete spec, this was surfaced to the
+user honestly as unrecoverable without the original text, and confirmed
+dropped -- marked here as permanently, deliberately unbuilt, not
+forgotten.
+
+**Recruitment on/off toggle: built for real (`engine/models.py`,
+`engine/game.py`, `server/main.py`, `frontend/src/phases/WaitingRoom.jsx`,
+`frontend/src/App.jsx`).** New `GameConfig.recruitment_enabled` field
+(defaults `True`), a new "Recruitment" `SettingLetter` in the Waiting
+Room mirroring the existing Show Your Hands toggle's own pattern, wired
+through `startGame` -> `start_game` message -> `GameConfig` the same way
+every other lobby setting already is. `submit_night_action`'s OFFER
+branch gained one new check ahead of the existing eligibility checks:
+`if not self.config.recruitment_enabled: raise IllegalActionError(...)`.
+Deliberately independent of the eligibility rule from the entry above --
+a host can turn recruitment off even in a game where it would otherwise
+be perfectly legal. `view_for` now exposes `recruitment_enabled` to Hand
+players alongside the existing `recruitment_used`, and `NightPanel`'s
+Kill/Offer toggle now checks both before showing the Offer option.
+2 new tests (`test_recruitment_disabled_blocks_offer_even_when_otherwise_eligible`,
+`test_recruitment_enabled_by_default`). Verified live against a running
+server: a 1-Hand-start game with `recruitment_enabled: false` correctly
+rejects a submitted Offer with `"Recruitment is disabled for this
+game"`, confirmed over the real WebSocket protocol.
+
+**Speaking-time tracking: removed entirely, not left as dead storage
+(`engine/game.py`, `engine/models.py` untouched, `frontend/src/phases/Room.jsx`,
+`frontend/src/index.css`).** `record_speaking_time`, the
+`speaking_seconds` field, its `view_for`/Ledger exposure, its
+`return_to_lobby` reset, and the frontend's speaking-time bar
+(`.mark-bar`/`.mark-bar-fill` CSS, `discussionSeconds` prop) are all
+gone. This project has no mic or voice integration of any kind and
+never will without a much larger scope change, so nothing could ever
+have called this in real play -- confirmed with the user that a
+permanently-empty stat is worse than no stat, not better. 3 tests that
+exercised the removed method were deleted from `tests/test_ledger.py`
+rather than adapted.
+
+**The true hand-shaped handprint (section 4.6), built for real
+(`frontend/src/components/Mark.jsx`, `frontend/src/App.jsx`,
+`frontend/src/phases/FirstLight.jsx`, `frontend/src/index.css`).** The
+death stamp on both the `DeadPanel` and `FirstLight` no longer reads
+generic `ELIMINATED` text in a box; it now shows the same drawn hand
+already used for the brand mark (`HandGlyph`, exported from `Mark.jsx`
+for the first time) inked in `--ink` at reduced opacity, stamped at the
+same -4deg tilt the box always had, with `ELIMINATED` kept underneath as
+a caption rather than the whole content. Deliberately reuses the
+existing hand path rather than drawing a second one, both for visual
+consistency with the brand mark and because the document's own
+description ("hand-shaped") is most literally satisfied by the shape
+the game already uses for its own logo.
+
+**Directional vote marks in the Ledger, built for real
+(`frontend/src/phases/Room.jsx`, `frontend/src/App.jsx`).** The
+accretion marks in the Room feed no longer show a generic count for
+votes cast; each cast vote now points a real compass arrow (one of 8:
+`↑↗→↘↓↙←↖`) toward the actual direction of the target's seat on the
+ring, computed from the same seat-index-to-angle formula `Table.jsx` and
+`Crossing.jsx` already use (`(360 / order.length) * i - 90`), fed the
+same `seatOrderRef` that never reorders mid-game. Votes pointing the
+same direction are grouped under one arrow with a count rather than
+drawn individually, keeping the "never summarized into a score" rule
+(section 2.5) intact -- direction is preserved exactly, only repeated
+identical directions are counted rather than redrawn. Votes received
+and Stand Asides keep their existing plain-count marks, since the
+surviving spec text only ever describes direction for a vote's own
+target, never for who voted for you.
+
+**Offer-in-progress UI for other Hand teammates, built for real
+(`frontend/src/App.jsx`).** Previously, a Hand teammate who wasn't the
+Offer's recipient kept seeing `NightPanel`'s live-looking Offer target
+picker during `Phase.OFFER` -- clickable, but any submission would
+silently fail server-side with `"Not the night phase"`, since the
+engine had already moved past `NIGHT`. They now see a dedicated "Offer
+in progress. Waiting for their answer." panel instead, naming the
+recipient when known, for the exact duration the recipient's own Offer
+screen is up. The Mafia chat panel stays available to them throughout,
+unchanged.
+
+**Verified:** 95/95 engine tests (2 new, 3 removed), both linters
+(pyflakes, oxlint) clean, `npm run build` clean, and the recruitment
+toggle confirmed live end to end over the real WebSocket protocol. The
+handprint stamp, directional vote marks, and offer-in-progress panel are
+pure frontend rendering over already-proven state fields and are not
+independently browser-verifiable in this environment -- the same
+standing gap noted since Phase 15 (no browser/screenshot tool exists
+here at all).

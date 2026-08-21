@@ -200,6 +200,7 @@ def _log_game_result(room: Room) -> None:
             "role_counts": {role.value: count for role, count in game.config.role_counts.items()},
             "show_hands_enabled": game.config.show_hands_enabled,
             "show_hands_threshold": game.config.show_hands_threshold,
+            "recruitment_enabled": game.config.recruitment_enabled,
             "discussion_seconds": room.discussion_seconds,
             "voting_seconds": room.voting_seconds,
         },

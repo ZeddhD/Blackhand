@@ -446,6 +446,28 @@ def test_marked_special_role_no_longer_required_to_act():
     assert inspector.id not in game.required_night_actor_ids()
 
 
+def test_recruitment_disabled_blocks_offer_even_when_otherwise_eligible():
+    # A post-launch decision: recruitment_enabled is independent of the
+    # eligibility rule above -- a host can turn the mechanic off entirely
+    # even in a game where offering would otherwise be perfectly legal
+    # (single starting Hand, more than 3 players, never used).
+    game = make_game(
+        names=["A", "B", "C", "D", "E", "F"],
+        role_counts={Role.HAND: 1, Role.INSPECTOR: 1},
+    )
+    game.config.recruitment_enabled = False
+    game.start_game()
+    hand = by_role(game, Role.HAND)[0]
+    other = next(p for p in game.players if p.role is not Role.HAND)
+    with pytest.raises(IllegalActionError):
+        game.submit_night_action(hand.id, ActionType.OFFER, other.id)
+
+
+def test_recruitment_enabled_by_default():
+    game = make_offer_game(names=["A", "B", "C", "D", "E", "F"])
+    assert game.config.recruitment_enabled is True
+
+
 def test_marked_player_can_still_submit_kill_on_a_later_night():
     game = make_offer_game(names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1, Role.INSPECTOR: 1})
     hand = by_role(game, Role.HAND)[0]

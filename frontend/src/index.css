@@ -658,15 +658,30 @@ button.selected {
 }
 
 .eliminated-stamp {
-  display: inline-block;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1-t);
   border: 2px solid var(--ink);
   padding: var(--space-1-t) var(--space-3-t);
+  transform: rotate(-4deg);
+  margin: var(--space-1-t) 0;
+}
+
+/* The true hand-shaped handprint (section 4.6), replacing a plain text
+   badge: the same drawn hand from Mark.jsx, inked and pressed down like a
+   stamp rather than a rendered brand mark. currentColor picks up --ink
+   from this ancestor, same as every other paper-context glyph. */
+.eliminated-stamp .handprint-glyph {
+  color: var(--ink);
+  opacity: 0.85;
+}
+
+.eliminated-stamp-label {
   font-family: var(--face-rec);
   font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.2em;
-  transform: rotate(-4deg);
-  margin: var(--space-1-t) 0;
 }
 
 .dead-panel-sub {
@@ -724,19 +739,6 @@ button.selected {
 .mark-dead {
   color: var(--ink);
   font-weight: 700;
-}
-
-.mark-bar {
-  display: inline-block;
-  width: 40px;
-  height: 4px;
-  background: var(--ink-faint);
-}
-
-.mark-bar-fill {
-  display: block;
-  height: 100%;
-  background: var(--ink-quiet);
 }
 
 /* -- The Crossing (section 6.7) and The Table (section 6.8). Both take

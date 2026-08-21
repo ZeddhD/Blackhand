@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useGameSocket } from "./useGameSocket";
 import Letter from "./components/Letter";
 import MafiaChat from "./components/MafiaChat";
-import Mark from "./components/Mark";
+import Mark, { HandGlyph } from "./components/Mark";
 import Timer from "./components/Timer";
 import PlayerRow from "./components/PlayerRow";
 import Room from "./phases/Room";
@@ -433,7 +433,28 @@ export default function App() {
 
       {isDead && <DeadPanel state={state} />}
 
-      {!isDead && displayPhase === "night" && (
+      {/* An offer sent by a teammate is in progress: this player is Black
+          Hand but not the recipient (state.offer_pending is only ever true
+          for them). Their own kill/offer target picker is meaningless
+          right now -- submitting anything would just be rejected by the
+          engine ("Not the night phase") -- so show what's actually
+          happening instead of a live-looking picker with nothing behind
+          it. */}
+      {!isDead && displayPhase === "night" && isHandFaction && state.phase === "offer" && (
+        <div className="card offer-pending-panel">
+          <div className="silent-banner compact">
+            <p className="silent-banner-text">STAY SILENT</p>
+          </div>
+          <h2>Offer in progress</h2>
+          <p className="muted">
+            {state.hand_target_name
+              ? `An offer has been made to ${state.hand_target_name}. Waiting for their answer.`
+              : "An offer is in progress. Waiting for their answer."}
+          </p>
+        </div>
+      )}
+
+      {!isDead && displayPhase === "night" && !(isHandFaction && state.phase === "offer") && (
         <NightPanel
           state={state}
           others={others}
@@ -456,7 +477,7 @@ export default function App() {
           connected={state.connected}
           ledger={state.ledger}
           timer={timer}
-          discussionSeconds={timer?.phase === "day_discussion" ? timer.totalSeconds : undefined}
+          seatOrder={seatOrderRef.current}
         />
       )}
 
@@ -547,7 +568,7 @@ function NightPanel({ state, others, isHandFaction, handMode, setHandMode, selec
       <div className="silent-banner compact">
         <p className="silent-banner-text">STAY SILENT</p>
       </div>
-      {isHandFaction && !state.recruitment_used && (
+      {isHandFaction && !state.recruitment_used && state.recruitment_enabled && (
         <div className="row">
           <button
             type="button"
@@ -597,7 +618,10 @@ function NightPanel({ state, others, isHandFaction, handMode, setHandMode, selec
 function DeadPanel({ state }) {
   return (
     <div className="card dead-panel">
-      <span className="eliminated-stamp">ELIMINATED</span>
+      <span className="eliminated-stamp">
+        <HandGlyph size={56} className="handprint-glyph" />
+        <span className="eliminated-stamp-label">ELIMINATED</span>
+      </span>
       <p className="dead-panel-sub">You cannot talk or use voice chat for the rest of the game.</p>
       <p className="muted">You can now see everything that happens, round by round.</p>
       <RoundLog log={state.round_log} />

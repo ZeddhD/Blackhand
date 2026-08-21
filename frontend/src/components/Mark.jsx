@@ -23,7 +23,7 @@ const HAND_PATH =
   "C64.09,11.57 62.63,13.96 61.47,13.89 C60.31,13.82 58.89,13.01 57.88,15.45 " +
   "C56.87,17.89 56.11,28.99 55.39,28.52 C54.68,28.06 54.41,15.78 53.60,12.66 Z";
 
-function HandGlyph({ size = 48, className }) {
+export function HandGlyph({ size = 48, className }) {
   return (
     <svg
       className={className}
