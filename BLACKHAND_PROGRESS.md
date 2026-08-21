@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 12 complete (Phase 11's human listening pass still pending). Phase 13 not started.**
+**Current status: Phase 13 complete (Phase 11's human listening pass still pending). Phase 14 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -1386,4 +1386,130 @@ exactly as designed, not just each piece in isolation.
   Delivery back in Phase 8. Worth deciding explicitly before Phase 15's
   full playtest needs it to actually work.
 
-## Phases 13 through 15: not started
+## Phase 13: The Reading (done)
+
+**Files touched:** `frontend/src/phases/Reading.jsx` (new),
+`frontend/src/components/RoundLog.jsx` (new, extracted), `frontend/src/App.jsx`
+(the old inline `GameOverPanel`/`RoundLog` removed, replaced by
+`Reading`), `frontend/src/components/Letter.jsx` (new `style` and
+`soundDelayMs` props), `frontend/src/index.css` (`.reading*` rules, one
+now-orphaned `.winner-names` rule removed). Also, genuinely outside this
+phase's stated frontend-only file list: `engine/game.py` and
+`tests/test_recruitment.py` (3 new tests, 82 total now).
+
+**A real protocol gap had to be closed before any of this could be
+built, not worked around from the frontend side.** Section 6.11 requires
+"every role revealed" and "the offer if there was one, and who took it
+or refused it," but `view_for()` had never exposed either: only
+`hand_reveal` (names of the Hand faction) existed, with no per-player
+role breakdown and no persistent record of the Offer's outcome once
+`_offer_recipient_id` gets reused or cleared by later rounds. This
+wasn't fixable by rearranging existing data client-side, the data
+genuinely didn't exist on the wire. Two additions: `Game.offer_outcome`
+(`None` until an offer resolves, then `{recipient_name, night,
+accepted}`, set once in `_resolve_offer` and never cleared again for
+the rest of the game, reset alongside `recruitment_used` in
+`return_to_lobby`), and `view_for`'s new `role_reveal` list
+(`{id, name, role, marked}` per player, gated to `Phase.GAME_OVER` like
+`hand_reveal` already was) using each player's literal, original role,
+since Blackhand's own design already treats "started as Hand" and "was
+recruited later" as two distinct facts worth preserving (Phase 2's own
+notes). Both were tested before the phase closed, per the document's
+own "engine changes require tests before the phase closes" rule: three
+new tests cover acceptance, refusal, and the no-offer-ever-made case,
+checking both the raw `Game` fields and their `view_for` shape. This is
+the same category of judgment call as Phase 1's forced one-line
+`rooms.py` fix: a small, low-risk exposure of already-computed internal
+state, necessary to satisfy an explicit acceptance line of the phase
+actually being built, not a new design decision or a new mechanic.
+
+**Reading belongs to THE ROOM's spatial grammar, not THE TABLE's**,
+per section 4.9's own list ("lobby, dawn, discussion, results"), so
+unlike Crossing/Table/Offer this is a normal scrollable feed within the
+existing app frame, not a full-viewport takeover. It replaces the old
+`GameOverPanel` in place.
+
+**Letters unfold in seating order using the same frozen `seatOrderRef`
+built in Phase 10**, not `state.players`' order, threaded down from
+`App.jsx` exactly like `Crossing`/`Table` already receive it.
+
+**Staggering needed two separate mechanisms, not one, because sound and
+CSS animation don't share a clock.** The 260ms visual stagger is a
+CSS `animation-delay` set per letter via a new `style` prop `Letter.jsx`
+didn't previously accept. But `Letter`'s own `letterUnfold()` sound
+fires from a `useEffect` on mount, and every letter in the Reading
+mounts in the same React render, so without a second mechanism every
+paper-unfold sound would fire simultaneously despite the letters
+visually appearing 260ms apart. `Letter.jsx` gained a `soundDelayMs`
+prop (default 0, so every other existing use of the component is
+unaffected) that delays the sound call with its own `setTimeout` to
+match. This is a real synchronization bug that would have shipped
+silently (no build error, no visual sign, only audible if anyone were
+listening) had the sound path not been traced through as carefully as
+the visual one.
+
+**"Every night action, kill, save, investigation. The offer if there
+was one" needed no new component at all**: this is exactly what the
+existing `round_log` data (built in Phase 2 and carried since) already
+contains, so `Reading` reuses it directly. The `RoundLog` renderer
+itself was duplicated between `DeadPanel` and the old `GameOverPanel`
+before this phase; extracted into its own `components/RoundLog.jsx` so
+`DeadPanel` and `Reading` share one implementation instead of two
+copies that could quietly drift apart.
+
+**The refusal card and the closing logo are sequenced with two
+`setTimeout`s, not left to arrive whenever they render:** the reading
+first computes how long the full staggered unfold takes
+(`(seats - 1) * 260ms + 420ms`, the same 420ms unfold duration `Letter`
+always uses), waits a further flat 2000ms after that, then either shows
+the refusal card (if `offer_outcome.accepted === false`) for about 900ms
+before the stacked logo, or goes straight to the logo if the offer was
+accepted or never made at all, satisfying "its absence is its own
+information" by construction rather than a conditional guess. Verified
+live against a running server, not just by reading the code: a 3-player
+game with one Hand, an offer made and refused, reaching
+`Phase.GAME_OVER` with `offer_outcome: {"recipient_name": "A", "night":
+1, "accepted": false}`, a `role_reveal` entry per player with correct
+literal roles, and a `round_log` that includes the `"Night 1 Offer"`
+entry `Reading`'s reused `RoundLog` will render.
+
+**The necessary practical addition not described anywhere in section
+6.11**: Return to Lobby / Leave Game buttons, since the document ends
+the beat at the stacked logo with no way back into the app described at
+all, and the game needs one. Placed after the logo, only once the whole
+sequence has finished (`stage === "logo"`), so they don't interrupt the
+ritual, the same reasoning already used for the Lobby's necessary but
+undescribed configuration controls.
+
+**Acceptance criteria:**
+- All letters unfold at 260ms stagger in seating order: confirmed by
+  reading (`STAGGER_MS = 260`, `seatOrder` from Phase 10's frozen ref)
+  and live, via the round-trip above proving the underlying data arrives
+  in a shape the stagger can actually iterate over correctly.
+- Complete record shown to everyone: reuses the existing `round_log`,
+  unconditionally rendered, not gated by role or alive/dead status at
+  `Phase.GAME_OVER` the way it already wasn't during play either.
+- The refusal line appears last, alone, after a two second pause:
+  confirmed by the two-stage timeout sequence and live data matching the
+  exact required wording, `"{name} refused the hand on night {n}."`
+- The line is absent entirely when no offer was made: confirmed by a
+  dedicated engine test (`offer_outcome` is `None`) and by the
+  component's `showsRefusal` guard.
+- Stacked logo closes the frame: renders only once `stage === "logo"`,
+  after the refusal card's own delay if there was one.
+- `npm run build` succeeds. `tests/` now 82/82 (3 new, all passing).
+  Zero em dashes, confirmed by grep across every file touched, engine
+  included.
+
+**Deliberately not done in Phase 13:**
+- No sound verification beyond the synchronization fix above; whether
+  the staggered unfolds actually sound staggered and correct is still
+  part of the same unresolved human-listening request from Phase 11.
+- No visual/browser confirmation of the actual stagger timing or the
+  refusal card's appearance, the same no-screenshot-tool gap noted in
+  Phases 8, 10, and 12.
+- **Not pushed**, per the confirmed policy. Show Your Hands still has no
+  interactive UI anywhere, and the build plan still never names a
+  dedicated phase for it (flagged again in Phase 12's notes).
+
+## Phases 14 through 15: not started

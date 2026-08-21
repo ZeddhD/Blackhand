@@ -974,17 +974,46 @@ button.selected {
   font-weight: 700;
 }
 
-.winner-names {
-  font-family: var(--face-hand);
-  font-size: 28px;
-  font-weight: 500;
-  margin: 0 0 var(--space-2-t);
-}
-
 .game-over-actions {
   margin-top: var(--space-3-t);
   padding-top: var(--space-2-t);
   border-top: 1px solid var(--ink-faint);
+  width: 100%;
+}
+
+/* -- The Reading (section 6.11). THE ROOM's spatial grammar, a normal
+   feed, not a takeover: everything rationed all game is spent here. --- */
+
+.reading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3-t);
+  width: 100%;
+}
+
+.reading-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2-t);
+  width: 100%;
+}
+
+.reading-role {
+  margin: 4px 0 0;
+  color: var(--ink-quiet);
+}
+
+/* The last card, always, alone, after the pause: no offer, no card. */
+.reading-refusal {
+  margin-top: var(--space-2-t);
+}
+
+.reading-mark {
+  margin-top: var(--space-3-t);
 }
 
 /* -- The Black Hand: never paper, room ground with lamp text, always. ----- */

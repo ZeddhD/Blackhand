@@ -10,6 +10,8 @@ import Room from "./phases/Room";
 import Crossing from "./phases/Crossing";
 import Table from "./phases/Table";
 import Offer from "./phases/Offer";
+import Reading from "./phases/Reading";
+import RoundLog from "./components/RoundLog";
 import { ROLE_INFO, roleLabel } from "./roles";
 import {
   clockTick,
@@ -346,7 +348,7 @@ export default function App() {
       )}
 
       {state.phase === "game_over" && (
-        <GameOverPanel state={state} onReturnToLobby={returnToLobby} onLeave={leaveRoom} />
+        <Reading state={state} seatOrder={seatOrderRef.current} onReturnToLobby={returnToLobby} onLeave={leaveRoom} />
       )}
       </div>
 
@@ -511,68 +513,6 @@ function DeadPanel({ state }) {
       <p className="dead-panel-sub">You cannot talk or use voice chat for the rest of the game.</p>
       <p className="muted">You can now see everything that happens, round by round.</p>
       <RoundLog log={state.round_log} />
-    </div>
-  );
-}
-
-function RoundLog({ log }) {
-  if (!log?.length) return null;
-  return (
-    <div className="round-log">
-      <h3>Case Log</h3>
-      {log.map((round, i) => (
-        <div key={i} className="round-log-entry">
-          <p className="round-log-title">{round.title}</p>
-          {round.lines.map((line, j) => (
-            <p key={j} className="round-log-line">
-              {line}
-            </p>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function GameOverPanel({ state, onReturnToLobby, onLeave }) {
-  const handWon = state.winner === "hand";
-  return (
-    <div className="card center">
-      <h1 className="title">{handWon ? "The Black Hand Wins" : "The Table Wins"}</h1>
-      {handWon ? (
-        <>
-          <p className="muted">The winning Hand:</p>
-          <p className="winner-names">{state.hand_reveal?.join(", ")}</p>
-        </>
-      ) : (
-        <>
-          <p className="muted">The Black Hand was caught. They were:</p>
-          <p className="winner-names">{state.hand_reveal?.join(", ") || "no one"}</p>
-        </>
-      )}
-      <RoundLog log={state.round_log} />
-      <div className="game-over-actions">
-        <button
-          className="primary"
-          onClick={() => {
-            if (window.confirm("Return everyone in this room to the lobby for a rematch?")) {
-              onReturnToLobby();
-            }
-          }}
-        >
-          Return to Lobby
-        </button>
-        <button
-          className="ghost"
-          onClick={() => {
-            if (window.confirm("Leave this game and return to the title screen?")) {
-              onLeave();
-            }
-          }}
-        >
-          Leave Game
-        </button>
-      </div>
     </div>
   );
 }
