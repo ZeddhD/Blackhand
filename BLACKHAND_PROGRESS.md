@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 11 complete, pending a human listening pass. Phase 12 not started.**
+**Current status: Phase 12 complete (Phase 11's human listening pass still pending). Phase 13 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -1255,4 +1255,135 @@ game, the moment the game actually starts.
 - **Not pushed**, per the confirmed policy. Show Your Hands and Offer
   still have no interactive UI.
 
-## Phases 12 through 15: not started
+## Phase 12: The Offer (done)
+
+**Files touched:** `frontend/src/phases/Offer.jsx` (new), `frontend/src/useGameSocket.js`
+(new `respondToOffer` sending `{type: "offer_response", accepted}`, the
+one message type Phase 5's server protocol already defined but the
+frontend never had a function for), `frontend/src/index.css`
+(`.offer-screen`/`.offer-letter`/`.offer-timer`/`.offer-controls`
+rules), `frontend/src/App.jsx` (a new full-takeover branch for the
+recipient, and three real correctness fixes described below).
+
+**The Offer screen itself reuses `Letter.jsx` directly** rather than
+building its own paper surface: `<Letter faction="hand">` already
+renders exactly `--room` ground and `--lamp` text, so the "one letter
+unfolds centered" requirement needed only a centering wrapper
+(`.offer-screen`, the same negative-margin full-bleed technique Phases
+10 and the rest of this phase reuse) and the verbatim copy as children.
+
+**"Fully black, not dimmed" is `--room` at its own full, undiminished
+value, not a fifth color.** Section 4.2 closes the palette to four
+values and their five documented mixes; introducing an actual `#000`
+for this one screen would break that rule for a single phase. `--room`
+(`#0F1216`) already reads as near-black, and "not dimmed" is read here
+as "not one of this document's own fractional-opacity treatments" (The
+Dark's 60%, Last Words' 20%): the Offer's room is just `--room` at full
+strength, no overlay, no dimming math applied on top of it.
+
+**Copy is verbatim, confirmed by grep against the document's exact
+text**, including the internal line breaks section 6.4 shows within the
+second and third paragraphs (rendered as `<br />` inside single `<p>`
+elements, since those are the same sentence group breaking mid-thought,
+not separate paragraphs).
+
+**The 30 second timer and timeout-as-refusal were already correct
+server-side work from Phase 5** (`OFFER_SECONDS = 30`,
+`resolve_offer_timeout()`); this phase only had to display it, always in
+`--lamp` (not the generic `Timer.jsx`'s under-10-seconds-only lamp
+threshold, since section 4.2 explicitly allows lamp for "the Black
+Hand's private surfaces" throughout, not just the last 10 seconds here).
+A small dedicated countdown was built in `Offer.jsx` rather than reusing
+`Timer.jsx`, since the two components' lamp rules are genuinely
+different, not just differently themed.
+
+**The struck wire plays exactly once**, from a plain `useEffect` with an
+empty dependency array on `Offer.jsx`'s mount, matching "when the letter
+opens," and has no repeat path anywhere in the component.
+
+**"On accept, the interface converts fully and permanently" surfaced a
+real, pre-existing frontend bug, the third instance of the same class of
+mistake this project has now caught** (after Phase 3's `hand_ready()`
+literal-role bug and Phase 5's disconnect-during-Offer hang, both in the
+engine): `NightPanel`'s `actionByRole` lookup and the Black Hand chat's
+render condition both checked `state.your_role === "hand"` directly.
+Since a Marked player's literal `role` never changes (only
+`effective_faction` does), a player who accepted the Offer would have
+correctly seen the Hand-faction role card (Phase 8 already got this
+right) but then hit "STAY SILENT" and no chat access on every
+subsequent night, unable to actually act as Hand at all through the UI.
+Both fixed to key off a new `isHandFaction` value
+(`your_role === "hand" || marked`), computed once in `App.jsx` and
+threaded into `NightPanel` as a prop rather than recomputed. **Given
+this fix, no bespoke "second letter with the names" needed to be built**:
+the existing role-reveal `Letter` from Phase 8 already renders the
+"Fellow Hand: ..." line the instant `state.allies` populates, which
+happens naturally the moment the server processes acceptance and broadcasts
+the next state. Verified live rather than assumed (see below).
+
+**"No other player's interface changes in any way" is enforced by never
+mounting `Offer.jsx` for anyone but the recipient**, not by hiding
+something after the fact: `App.jsx` renders it only when
+`state.offer_pending` is true, a field `view_for` only ever sets for the
+one player the offer was actually sent to (confirmed in Phase 5). Every
+other player's `state.phase` does read `"offer"` too, since the server
+broadcasts the same phase value to everyone, so a `displayPhase` value
+was added that quietly treats `"offer"` as still `"night"` for anyone
+who isn't the recipient, meaning they keep seeing whatever night UI they
+were already looking at (their `NightPanel`, their Black Hand chat if
+they're a Hand) with zero visible change, exactly as if nothing had
+happened yet. A bystander whose own night action would technically be
+rejected server-side during this pause (the engine requires
+`Phase.NIGHT` to submit one) is an accepted, narrow edge case: the
+document asks for no *visible* change, not for disabling controls that
+would already have nothing left to do in this ~30 second window in
+ordinary play.
+
+**Verified live against a running server, then the script was deleted,
+per established practice:** a 7-player game, a Hand offering instead of
+killing, and three separate connections read simultaneously during the
+same live Offer: the recipient correctly showed `offer_pending: true`;
+an ordinary Table bystander showed `phase: "offer"` with no
+`offer_pending` field at all; the *other* Hand member (the one who did
+not send the offer) also showed `phase: "offer"`, no `offer_pending`,
+and an `allies` list that correctly did not yet include the recipient.
+After the recipient accepted: `marked: true`, `allies` now including
+both original Hands, `offer_pending` gone, and `phase` already advanced
+to `day_discussion`, confirming the whole handoff chain end to end
+exactly as designed, not just each piece in isolation.
+
+**Acceptance criteria:**
+- Room goes fully black, not dimmed: `.offer-screen` sets `background:
+  var(--room)` at full strength, no overlay or opacity treatment.
+- Copy matches 6.4 verbatim, character for character: confirmed by grep.
+- 30 second timer, timeout treated as refusal: the timer displays the
+  server's own `OFFER_SECONDS = 30` countdown; the timeout path was
+  already correct engine/server behavior from Phase 5, confirmed still
+  intact by this phase's live run reaching the accept path without
+  needing any change there.
+- Struck wire plays once, does not repeat: confirmed by reading the
+  component, one `useEffect(..., [])` call site, no interval, no replay
+  trigger anywhere.
+- On accept the interface converts fully and permanently: confirmed
+  live, `marked` and `allies` both update correctly and the NightPanel/
+  chat bug that would have silently broken this for real play is fixed.
+- No other player's interface changes in any way: confirmed live for
+  both an ordinary bystander and the other Hand member in the same run.
+- `npm run build` succeeds. `tests/` still 79/79 (no engine changes this
+  phase). Zero em dashes, confirmed by grep across every file touched.
+
+**Deliberately not done in Phase 12:**
+- No audio-quality verification of the struck wire "resembling nothing
+  else," the same human-listening gap Phase 11 already flagged and
+  still hasn't been closed; this phase just gave it its first real call
+  site.
+- No visual/browser confirmation of "fully black," consistent with the
+  no-screenshot-tool gap noted in Phases 8 and 10.
+- **Not pushed**, per the confirmed policy. Show Your Hands still has no
+  interactive UI anywhere in this app, and unlike the Offer (this phase)
+  or Delivery, Part 8's 15-phase list never names a dedicated phase for
+  it at all, the same kind of build-plan gap already flagged for
+  Delivery back in Phase 8. Worth deciding explicitly before Phase 15's
+  full playtest needs it to actually work.
+
+## Phases 13 through 15: not started

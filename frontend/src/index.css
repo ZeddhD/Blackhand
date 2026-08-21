@@ -874,6 +874,49 @@ button.selected {
   color: var(--ink);
 }
 
+/* -- The Offer (section 6.4). Full takeover, undimmed --room: not a
+   fractional dim like The Dark or Last Words, the room at its own full
+   color, which is already near-black. One centered hand-faction letter,
+   the only lamp text on screen. -------------------------------------- */
+
+.offer-screen {
+  margin: calc(-1 * var(--space-3-t)) calc(-1 * var(--space-2-t)) calc(-1 * var(--space-4-t));
+  min-height: 100vh;
+  background: var(--room);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2-t);
+}
+
+.offer-letter {
+  text-align: center;
+}
+
+.offer-timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 20px;
+  margin: 0 0 var(--space-2-t);
+}
+
+.offer-controls {
+  display: flex;
+  gap: var(--space-1-t);
+  justify-content: center;
+  margin-top: var(--space-2-t);
+}
+
+.offer-controls button {
+  width: auto;
+  color: var(--lamp);
+  border-color: var(--lamp-quiet);
+}
+
+.offer-controls button:hover:not(:disabled) {
+  border-color: var(--lamp);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .crossing-seat {
     animation: none;

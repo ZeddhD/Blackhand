@@ -9,6 +9,7 @@ import PlayerRow from "./components/PlayerRow";
 import Room from "./phases/Room";
 import Crossing from "./phases/Crossing";
 import Table from "./phases/Table";
+import Offer from "./phases/Offer";
 import { ROLE_INFO, roleLabel } from "./roles";
 import {
   clockTick,
@@ -57,6 +58,7 @@ export default function App() {
     nightAction,
     vote,
     sendMafiaChat,
+    respondToOffer,
   } = useGameSocket();
 
   const [name, setName] = useState("");
@@ -232,6 +234,7 @@ export default function App() {
   const alivePlayers = state.players.filter((p) => p.alive);
   const others = state.players.filter((p) => p.id !== playerId);
   const isHost = state.is_host === true;
+  const isHandFaction = state.your_role === "hand" || state.marked;
 
   // The Table takes over the entire screen: no topbar, no event log, no
   // navigation reachable while it's up (section 6.8). The sr-only live
@@ -251,6 +254,26 @@ export default function App() {
       </>
     );
   }
+
+  // The Offer (section 6.4) is rendered only for the one player it was
+  // actually made to. Everyone else -- including the Hand who sent it --
+  // keeps seeing whatever they were already looking at: state.phase is
+  // "offer" for them too, but offer_pending is only ever true for the
+  // recipient, so displayPhase below quietly treats it as still "night"
+  // for anyone it wasn't sent to. "No other player's interface changes
+  // in any way" is enforced by never mounting this component for them.
+  if (state.offer_pending) {
+    return (
+      <>
+        <div className="sr-only" role="status" aria-live="polite">
+          {announcement}
+        </div>
+        <Offer timer={timer} onRespond={respondToOffer} />
+      </>
+    );
+  }
+
+  const displayPhase = state.phase === "offer" ? "night" : state.phase;
 
   return (
     <div className="screen">
@@ -281,7 +304,7 @@ export default function App() {
       )}
 
       {state.phase !== "lobby" && state.phase !== "game_over" && (
-        <Letter faction={state.your_role === "hand" || state.marked ? "hand" : "table"}>
+        <Letter faction={isHandFaction ? "hand" : "table"}>
           <h2>Your Role</h2>
           <p className="role-badge">
             You are: <strong>{roleLabel(state.your_role)}</strong>
@@ -297,17 +320,18 @@ export default function App() {
 
       {isDead && <DeadPanel state={state} />}
 
-      {!isDead && state.phase === "night" && (
+      {!isDead && displayPhase === "night" && (
         <NightPanel
           state={state}
           others={others}
+          isHandFaction={isHandFaction}
           selectedTarget={selectedTarget}
           setSelectedTarget={setSelectedTarget}
           nightAction={nightAction}
         />
       )}
 
-      {!isDead && state.your_role === "hand" && state.phase === "night" && (
+      {!isDead && isHandFaction && displayPhase === "night" && (
         <MafiaChat messages={mafiaChat} onSend={sendMafiaChat} />
       )}
 
@@ -409,12 +433,22 @@ const ACTION_TITLE = {
   investigate: "Choose someone to investigate",
 };
 
-function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAction }) {
-  const role = state.your_role;
+function NightPanel({ state, others, isHandFaction, selectedTarget, setSelectedTarget, nightAction }) {
+  // A Marked player's literal role never changes, only effective faction
+  // does (engine/models.py's effective_faction), so this checks that, not
+  // state.your_role directly -- a recruit who accepted the Offer must see
+  // the Hand's kill target UI on every night after, not "STAY SILENT."
   // Hand's night action defaults to a kill target here; choosing the Offer
-  // instead (section 2.3) has no UI yet -- that arrives with the Offer beat.
-  const actionByRole = { hand: "kill", watchman: "protect", inspector: "investigate" };
-  const actionType = actionByRole[role];
+  // instead (section 2.3) has no UI yet, that's the sender's side of this
+  // same beat and still has no control -- the Offer screen itself (this
+  // phase) only builds the recipient's side.
+  const actionType = isHandFaction
+    ? "kill"
+    : state.your_role === "watchman"
+      ? "protect"
+      : state.your_role === "inspector"
+        ? "investigate"
+        : null;
 
   const progress =
     state.night_actions_total != null ? (
@@ -434,7 +468,7 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
   }
 
   const targets = actionType === "protect" ? state.players.filter((p) => p.alive) : others.filter((p) => p.alive);
-  const selectedId = role === "hand" ? state.hand_target_id : selectedTarget;
+  const selectedId = isHandFaction ? state.hand_target_id : selectedTarget;
 
   return (
     <div className="card">
@@ -442,7 +476,7 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
         <p className="silent-banner-text">STAY SILENT</p>
       </div>
       <h2>{ACTION_TITLE[actionType]}</h2>
-      {role === "hand" && (
+      {isHandFaction && (
         <p className="muted">
           {state.hand_target_name
             ? `Team target: ${state.hand_target_name}. Any Hand member can change it.`
