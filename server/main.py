@@ -201,8 +201,34 @@ async def ws_endpoint(websocket: WebSocket):
                 if room.game.votes_complete():
                     room.early_end_event.set()
 
+            elif mtype == "offer_response":
+                if room is None or player_id is None:
+                    continue
+                try:
+                    room.game.respond_to_offer(player_id, bool(msg.get("accepted")))
+                except IllegalActionError as e:
+                    await _send_error(websocket, str(e))
+                    continue
+                await broadcast_state(room)
+                room.early_end_event.set()
+
+            elif mtype == "show_hands_vote":
+                if room is None or player_id is None:
+                    continue
+                try:
+                    room.game.submit_show_hands_vote(player_id, msg.get("choice"))
+                except IllegalActionError as e:
+                    await _send_error(websocket, str(e))
+                    continue
+                await broadcast_state(room)
+                if room.game.show_hands_votes_complete():
+                    room.early_end_event.set()
+
             elif mtype == "mafia_chat":
                 if room is None or player_id is None:
+                    continue
+                if room.game.phase == Phase.SHOW_HANDS:
+                    await _send_error(websocket, "The channel is disabled during Show Your Hands")
                     continue
                 if player_id not in room.mafia_channel_ids():
                     await _send_error(websocket, "You are not in the mafia channel")

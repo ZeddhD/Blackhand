@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 4 complete. Phase 5 not started.**
+**Current status: Phase 5 complete. Phase 6 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -361,4 +361,97 @@ isn't lost.
 - `server/`, `frontend/` untouched. **Not pushed**, per the confirmed
   policy.
 
-## Phases 5 through 15: not started
+## Phase 5: Server protocol (done)
+
+**Files touched:** `server/rooms.py`, `server/main.py`, plus one necessary
+cross-phase fix in `engine/game.py` (see below) and one new test in
+`tests/test_recruitment.py`. This is the first phase to touch `server/`
+at all -- everything before this was engine-only.
+
+**The room loop (`run_room`) now drives two more phases**, inserted in
+the correct cascade position so a single pass can fall through multiple
+transitions the way NIGHT to DAY_DISCUSSION already did:
+`SHOW_HANDS -> NIGHT -> OFFER -> DAY_DISCUSSION -> VOTING`. Show Your
+Hands reuses the existing `_countdown`/`early_end_event` pattern exactly
+like Voting does (real timer, early exit once everyone's voted). The
+Offer also reuses `_countdown`/`early_end_event`, but needs one extra
+guard Voting/Discussion never needed: a response can pre-empt the timer
+entirely (`respond_to_offer` transitions the phase away from `Phase.OFFER`
+before the natural 30s elapses), so `run_room` only calls
+`resolve_offer_timeout()` if the phase is *still* `Phase.OFFER` after the
+countdown returns, otherwise it was already resolved by an actual answer.
+
+**Two new WebSocket message types:** `offer_response` (`{"accepted":
+bool}`, calls `respond_to_offer`) and `show_hands_vote` (`{"choice":
+"hold"|"call_it"}`, calls `submit_show_hands_vote`). No new message type
+was needed for *submitting* an offer -- `night_action` with
+`action_type: "offer"` already worked automatically once Phase 2 added
+`ActionType.OFFER`, since `server/main.py`'s handler was already generic.
+
+**The Black Hand channel is disabled during Show Your Hands** by making
+`Room.mafia_channel_ids()` return an empty set during `Phase.SHOW_HANDS`,
+rather than adding a separate check. This one change correctly blocks
+both sending (the existing `mafia_chat` handler already checks membership
+against this set) and the broadcast recipient list, with no separate
+code path to keep in sync. A slightly more specific error message
+("disabled during Show Your Hands" instead of the generic "not in the
+channel") was added on top for a sender who tries anyway. One
+acknowledged, minor, unhandled edge case: a Hand who reconnects *during*
+Show Your Hands won't get their chat history re-synced until the phase
+ends or a new message is sent, since the reconnect-sync call also goes
+through the now-empty `mafia_channel_ids()`. Not fixed, spec doesn't ask
+for it, rare enough to accept.
+
+**A real hang bug was found and fixed in the engine while wiring this
+in, not caught by any existing test:** if the offer *recipient*
+disconnects during their own 30-second response window, the generic
+`handle_disconnect_removal` path would have just marked them dead without
+ever calling `_resolve_offer`, leaving `game.phase` stuck at `Phase.OFFER`
+forever -- nothing in `run_room` would ever move it again, since the
+timeout guard only fires from inside the room's own countdown loop, and
+that loop had already moved on. Fixed: `handle_disconnect_removal` now
+special-cases this one situation and resolves the offer as a refusal
+(same as a timeout) instead of taking the generic path. Covered by
+`test_recipient_disconnecting_during_offer_resolves_it_as_a_timeout` in
+`tests/test_recruitment.py`. This is a second example (after Phase 3's
+`effective_faction` gap) of a real correctness bug surfacing only once a
+later phase actually exercised a code path the way a live client would,
+not from the original phase's own tests -- worth staying alert for more
+of these as Phase 6+ starts exercising the engine from an actual browser.
+
+**Verified live against a running server, then the scripts were deleted
+per the phase's own acceptance criteria:**
+- Offer delivered only to the recipient: every other player's view
+  (bystanders, the offering Hand, the other Hand) confirmed to never
+  contain `offer_pending`.
+- The Black Hand channel is genuinely disabled during Show Your Hands: a
+  Hand's `mafia_chat` attempt during that phase gets the specific error
+  message, then succeeds normally once the phase ends.
+- Marked player gains channel access on acceptance: confirmed both
+  structurally (`allies` list) and functionally (an actual chat message
+  sent and received after accepting).
+- The offer timeout path specifically (nobody answers, server's own
+  30-second countdown fires `resolve_offer_timeout()`): confirmed with
+  `OFFER_SECONDS` temporarily shrunk for the test, then reverted. Two
+  bugs were found and fixed in the *test scripts themselves* while
+  chasing this down (a stale queued message being misread as the
+  resolution, and an unbuffered per-socket backlog), not in the server --
+  worth remembering that a `night`-phase-looking result right after
+  submitting an offer is almost always the leftover pre-transition
+  broadcast, not a real regression, given how fast `resolve_night`
+  transitions into `Phase.OFFER` once the shared target is set.
+
+**Deliberately not done in Phase 5:**
+- No lobby-side way to configure `show_hands_enabled`/`show_hands_threshold`
+  from the client yet; `start_game` still only reads `role_counts` and the
+  two existing timer fields. The engine defaults (on, threshold 6) already
+  match section 7.1's stated defaults, so this isn't broken, just not yet
+  host-configurable over the wire. Left for Phase 14 (the Lobby).
+- No `recruitment_enabled` toggle either, consistent with it being
+  deferred since Phase 2.
+- `frontend/` still completely untouched. **Not pushed**, per the
+  confirmed policy -- the live site still can't start a game at all with
+  the current deployed frontend's stale role names, and this phase adds
+  two more message types the frontend doesn't know about yet either.
+
+## Phases 6 through 15: not started
