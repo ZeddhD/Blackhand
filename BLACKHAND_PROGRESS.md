@@ -1790,7 +1790,28 @@ losing one of three Hands (must reach exactly one, not just fewer than
 the start), legal immediately with a 1-Hand start, blocked at 3 total
 players alive, legal at exactly 4. 92 tests total now, all passing.
 
-**No frontend changes needed.** The Offer has no send-side UI yet (a
-Hand player has no way to choose "offer" over "kill" from the browser at
-all, per Phase 12's own notes), so this is a pure engine-correctness
-change with nothing to wire up until that UI exists.
+**Update, same session:** the send-side UI gap above was closed right
+after this was written. `NightPanel` (`frontend/src/App.jsx`) now shows
+a Kill/Offer toggle for Hand players (hidden once `recruitment_used` is
+true), lifted `handMode` state alongside the existing `selectedTarget`
+so it resets the same way each round, and filters the Offer target list
+to exclude known Hand teammates by name (`state.allies`) as a UX
+nicety, not a real check.
+
+Eligibility for Offer (last living member, more than 3 players, not
+already used) is deliberately **not** recomputed client-side at all: the
+engine is the one place that rule lives, and `submit_night_action`
+already rejects an ineligible attempt with a real reason, surfaced
+through the app's existing error banner. Duplicating that logic in the
+frontend would just be a second copy that could drift out of sync with
+the engine's actual rule, the exact failure mode this whole file exists
+to catch. Verified live against a running server: submitting
+`{action_type: "offer", target_id}` through this exact new UI path
+(a 1-Hand-from-start game, night one) correctly sets
+`hand_action_mode: "offer"` server-side.
+
+Still not built: the recipient already has a full Offer screen (Phase
+12); the *other* Hand teammates (in a 2+ Hand game, once eligible) still
+only see the generic "team target: X" line already used for kills, not
+anything specific to an offer being in progress -- not asked for, not
+added speculatively.
