@@ -1,7 +1,6 @@
 # Blackhand
 
-Link: https://mafia-game-bo9t.onrender.com (still mid-deploy of this
-rewrite; see the testing gap section below before trusting what's live)
+Link: https://blackhand.onrender.com
 
 Browser-based social deduction game, inspired by the historical Black
 Hand extortion letters. Players talk over a voice channel (Discord or
