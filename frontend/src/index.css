@@ -863,6 +863,10 @@ button.selected {
   font-family: var(--face-rec);
   font-size: 11px;
   letter-spacing: 0.04em;
+  max-width: 64px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .table-seat-selected .avatar {
