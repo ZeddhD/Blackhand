@@ -103,6 +103,7 @@ export function useGameSocket() {
   const vote = useCallback((targetId) => send({ type: "vote", target_id: targetId }), [send]);
   const sendMafiaChat = useCallback((text) => send({ type: "mafia_chat", text }), [send]);
   const respondToOffer = useCallback((accepted) => send({ type: "offer_response", accepted }), [send]);
+  const submitShowHandsVote = useCallback((choice) => send({ type: "show_hands_vote", choice }), [send]);
 
   return {
     connected,
@@ -121,5 +122,6 @@ export function useGameSocket() {
     vote,
     sendMafiaChat,
     respondToOffer,
+    submitShowHandsVote,
   };
 }
