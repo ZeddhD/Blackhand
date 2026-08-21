@@ -3,10 +3,12 @@ import Avatar from "./Avatar";
 // Shared row for every place a player is listed and clickable (lobby roster,
 // night targeting, voting). One component means the visual language for
 // "this represents a person" never drifts between screens.
-export default function PlayerRow({ name, onClick, selected, danger, tag, disabled, offline, dead }) {
-  const classes = ["player-row", selected ? "selected" : danger ? "danger" : "primary"]
-    .filter(Boolean)
-    .join(" ");
+//
+// There is no "dangerous action" color variant. A kill target and a
+// protect target render identically -- the weight of a choice comes from
+// its context and copy, never from a color (section 4.2: no red anywhere).
+export default function PlayerRow({ name, onClick, selected, tag, disabled, offline, dead }) {
+  const classes = ["player-row", selected ? "selected" : "primary"].filter(Boolean).join(" ");
 
   const content = (
     <>
