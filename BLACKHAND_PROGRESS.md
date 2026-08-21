@@ -1815,3 +1815,64 @@ Still not built: the recipient already has a full Offer screen (Phase
 only see the generic "team target: X" line already used for kills, not
 anything specific to an offer being in progress -- not asked for, not
 added speculatively.
+
+### The three remaining build-plan gaps closed: Show Your Hands, Delivery, First Light
+
+All three had been flagged as gaps repeatedly since Phase 9 (Show Your
+Hands: no UI at all, could get a game stuck) and Phase 8 (Delivery and
+First Light: never assigned a phase in the original 15-phase plan at
+all). Built together in one pass since none of them touch each other's
+code.
+
+**Show Your Hands (`frontend/src/phases/ShowYourHands.jsx`, new).**
+Section 6.10 is explicit that this is "not a phase change... it happens
+inside the ring," so it reuses `.table-screen`/`.table-ring` directly:
+the same seat layout as The Table, but passive (a roster, not a target
+list), with the question and two controls overlaid below it. Wired to
+`show_hands_vote`, a message type the server has supported since Phase
+5 with no caller until now. A real mistake caught before it shipped: the
+first draft reused `.offer-controls` for the Hold/Call It buttons purely
+for its flex layout, which also colors button text `--lamp` -- correct
+for the Black Hand's private surfaces, wrong here, since this is a
+Table-wide vote on the ink ground, not one of the three places lamp is
+rationed to. Given its own `.show-hands-controls` class instead.
+Verified live: a 6-player game (the default threshold) opens directly on
+Show Your Hands, and submitting the exact message this UI now sends for
+every player correctly resolves to Night with the right public event
+text.
+
+**Delivery (`frontend/src/phases/Delivery.jsx`, new).** Section 6.2's
+self-closing 4-second role-reveal letter. Has no engine phase of its own
+(the server just starts including a role the instant the lobby ends), so
+it's a client-side one-shot in `App.jsx`: the first time `your_role` is
+seen in a game, hold a full-black takeover (the same `Letter` content
+the persistent role card already shows) for a flat 4000ms, tracked in a
+ref reset on return to lobby so a rematch shows it again. Takes priority
+over every other screen since it only ever happens once, right at the
+start.
+
+**First Light (`frontend/src/phases/FirstLight.jsx`, new).** Section
+6.5's forced 10-second dawn pause. Also no engine phase (the server goes
+straight from night, or offer, into day_discussion), so it's the same
+client-side hold pattern already established for the Crossing, keyed off
+its own previous-phase ref. Reuses the exact public event string
+(`state.events`'s last entry) rather than a second hardcoded copy of
+"Nobody was killed last night.", so it can never drift from the one
+message the engine guarantees is byte-identical across a blocked kill
+and a successful recruitment. A death gets the existing
+`.eliminated-stamp` mark as an honest approximation of section 4.6's
+true hand-shaped handprint, which still isn't built (same gap noted
+since Phase 9, not solved here either, just not silently skipped).
+
+**Verified:** 92/92 engine tests (no engine changes), both linters
+(pyflakes, oxlint) clean, clean build, and the Show Your Hands flow
+confirmed live end to end through the exact new UI's message shape.
+Delivery and First Light are pure client-side timing over already-proven
+state fields (`your_role`, `events`), so no new server interaction
+existed to verify beyond what's already been confirmed live many times
+this session.
+
+**Still not built:** the true hand-shaped handprint stamp visual
+(section 4.6) remains an approximation everywhere it's used, including
+here. The Waiting Room's optional written-line prompt (section 6.1)
+remains unspecified anywhere in the document and unguessed-at.

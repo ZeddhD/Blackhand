@@ -931,6 +931,52 @@ button.selected {
   color: var(--ink);
 }
 
+/* -- Show Your Hands (section 6.10). Not a phase change: it happens
+   inside the same ring The Table uses, so it reuses .table-screen and
+   .table-ring directly. No lamp here at all, this is a Table-wide vote
+   on the ink ground, not one of the Black Hand's rationed surfaces. --- */
+
+.show-hands-question {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2-t);
+  text-align: center;
+}
+
+.show-hands-timer {
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 20px;
+  margin: 0;
+}
+
+.show-hands-controls {
+  display: flex;
+  gap: var(--space-1-t);
+  justify-content: center;
+}
+
+.show-hands-choice {
+  width: auto;
+  color: var(--paper);
+  border-color: var(--paper-edge);
+}
+
+.show-hands-choice[data-selected="true"] {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--paper);
+}
+
+/* --ink-quiet is a middle gray, the one mix in the palette that reads
+   as legibly "muted" against either --paper or --ink, unlike
+   --paper-edge, which is nearly indistinguishable from full paper. */
+.show-hands-waiting {
+  color: var(--ink-quiet);
+}
+
 /* -- The Offer (section 6.4). Full takeover, undimmed --room: not a
    fractional dim like The Dark or Last Words, the room at its own full
    color, which is already near-black. One centered hand-faction letter,
@@ -972,6 +1018,39 @@ button.selected {
 
 .offer-controls button:hover:not(:disabled) {
   border-color: var(--lamp);
+}
+
+/* -- The Delivery (section 6.2). "The room drops to a single lamp.
+   Every other letter goes dark." Always --room, regardless of the
+   letter's own faction color, since it's the surrounding room going
+   dark that this describes, not the letter itself. ----------------- */
+
+.delivery-screen {
+  margin: calc(-1 * var(--space-3-t)) calc(-1 * var(--space-2-t)) calc(-1 * var(--space-4-t));
+  min-height: 100vh;
+  background: var(--room);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2-t);
+}
+
+/* -- First Light (section 6.5). "Room returns to full": no dimming
+   overlay at all, unlike The Dark's 60% or Last Words' 20%, just the
+   room at its own ordinary strength holding one fact on screen. ----- */
+
+.first-light-screen {
+  margin: calc(-1 * var(--space-3-t)) calc(-1 * var(--space-2-t)) calc(-1 * var(--space-4-t));
+  min-height: 100vh;
+  background: var(--room);
+  color: var(--paper);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2-t);
+  padding: var(--space-2-t);
+  text-align: center;
 }
 
 @media (prefers-reduced-motion: reduce) {

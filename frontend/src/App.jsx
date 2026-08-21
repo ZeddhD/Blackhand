@@ -10,6 +10,9 @@ import WaitingRoom from "./phases/WaitingRoom";
 import Crossing from "./phases/Crossing";
 import Table from "./phases/Table";
 import Offer from "./phases/Offer";
+import ShowYourHands from "./phases/ShowYourHands";
+import Delivery from "./phases/Delivery";
+import FirstLight from "./phases/FirstLight";
 import Reading from "./phases/Reading";
 import RoundLog from "./components/RoundLog";
 import { ROLE_INFO, roleLabel } from "./roles";
@@ -60,6 +63,7 @@ export default function App() {
     vote,
     sendMafiaChat,
     respondToOffer,
+    submitShowHandsVote,
   } = useGameSocket();
 
   const [name, setName] = useState("");
@@ -75,6 +79,10 @@ export default function App() {
   const seatOrderRef = useRef(null);
   const prevPhaseForCrossing = useRef(null);
   const [showCrossing, setShowCrossing] = useState(false);
+  const deliveryShownRef = useRef(false);
+  const [showDelivery, setShowDelivery] = useState(false);
+  const prevPhaseForFirstLight = useRef(null);
+  const [showFirstLight, setShowFirstLight] = useState(false);
 
   useEffect(() => {
     setSelectedTarget(null);
@@ -102,6 +110,43 @@ export default function App() {
     // on change far more often and none of them matter here).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.phase, state?.players]);
+
+  // The Delivery (section 6.2): role reveal, once per game, right at the
+  // start. No engine phase of its own either -- the server just starts
+  // sending a role the instant the game leaves the lobby -- so this is a
+  // client-side one-shot: the first time a role is seen this game, hold
+  // it on screen for a flat 4 seconds before falling through to the
+  // normal render tree.
+  useEffect(() => {
+    if (!state) return;
+    if (state.phase === "lobby") {
+      deliveryShownRef.current = false;
+      return;
+    }
+    if (state.your_role && !deliveryShownRef.current) {
+      deliveryShownRef.current = true;
+      setShowDelivery(true);
+      const t = setTimeout(() => setShowDelivery(false), 4000);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.phase, state?.your_role]);
+
+  // First Light (section 6.5): 10 forced seconds of no input at dawn,
+  // also with no engine phase of its own -- the server goes straight
+  // from night (or offer) into day_discussion. Same client-side hold
+  // pattern as the Crossing, timed off its own previous-phase ref.
+  useEffect(() => {
+    if (!state) return;
+    const was = prevPhaseForFirstLight.current;
+    prevPhaseForFirstLight.current = state.phase;
+    if (state.phase === "day_discussion" && (was === "night" || was === "offer")) {
+      setShowFirstLight(true);
+      const t = setTimeout(() => setShowFirstLight(false), 10000);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.phase]);
 
   // The Crossing (section 6.7) is a fixed 3 second beat with no engine
   // phase of its own: the server moves straight from day_discussion to
@@ -257,6 +302,33 @@ export default function App() {
   const isHost = state.is_host === true;
   const isHandFaction = state.your_role === "hand" || state.marked;
 
+  // The Delivery takes priority over everything else: it only ever
+  // happens once, right at the start, and nothing should interrupt it.
+  if (showDelivery) {
+    return (
+      <>
+        <div className="sr-only" role="status" aria-live="polite">
+          Your role has arrived.
+        </div>
+        <Delivery state={state} isHandFaction={isHandFaction} />
+      </>
+    );
+  }
+
+  // First Light: 10 forced seconds with no input, section 6.5. Also a
+  // full takeover, and also only for living players -- a dead player's
+  // screen already has no input to restrict.
+  if (!isDead && showFirstLight) {
+    return (
+      <>
+        <div className="sr-only" role="status" aria-live="polite">
+          {state.events?.[state.events.length - 1]}
+        </div>
+        <FirstLight events={state.events} />
+      </>
+    );
+  }
+
   // The Table takes over the entire screen: no topbar, no event log, no
   // navigation reachable while it's up (section 6.8). The sr-only live
   // region is duplicated here rather than restructured into, since it's
@@ -272,6 +344,26 @@ export default function App() {
         ) : (
           <Table state={state} seatOrder={seatOrderRef.current} playerId={playerId} timer={timer} vote={vote} />
         )}
+      </>
+    );
+  }
+
+  // Show Your Hands (section 6.10): "not a phase change... happens
+  // inside the ring." Reuses the same full-takeover grammar as The
+  // Table for that reason, just with the ring passive and a question
+  // in place of a target list.
+  if (!isDead && state.phase === "show_hands") {
+    return (
+      <>
+        <div className="sr-only" role="status" aria-live="polite">
+          {announcement}
+        </div>
+        <ShowYourHands
+          state={state}
+          seatOrder={seatOrderRef.current}
+          timer={timer}
+          submitVote={submitShowHandsVote}
+        />
       </>
     );
   }
