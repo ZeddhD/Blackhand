@@ -1,46 +1,69 @@
 /*
-  Design system: "Case File Noir".
+  Blackhand design tokens (section 4).
 
-  Three accent colors exist and each means exactly one thing, everywhere:
-    --brass  official / neutral / selected / informational
-    --blood  lethal / destructive actions only (kill, lynch vote)
-    --steel  night / investigative / passive info
-  No other hues are introduced anywhere, including avatars, so nothing
-  reads as arbitrary or decorative.
+  Four base colors exist and nothing else does. Every other color in this
+  file is one of the five documented color-mix() derivatives listed here,
+  or --lamp used exactly where the document rations it: time running out,
+  the one thing to act on now, and the Black Hand's private surfaces.
 
-  Typography: sans-serif for all body copy (fast scanning under time
-  pressure), serif only for screen titles, monospace "stamped" type for
-  card tabs and system headers (the case-file / typewriter motif).
+  Two type families exist. Serif (--face-hand) is human testimony: names,
+  claims, said things. Mono (--face-rec) is the record: votes, counts,
+  timers, marks, results. That split is the whole reason two families
+  exist, so it is never blurred.
 
-  Dead players get a fully desaturated screen instead of another loud
-  banner -- it is the only place `grayscale` is used, so it can never be
-  confused with any other state.
+  No gradients, no blur, no glassmorphism, no drop shadows, no border
+  radius above 0, no purple, no neon, no color outside the set above.
+  Depth is a hard 2px offset of --room, never a blur.
 */
 
 :root {
   color-scheme: dark;
 
-  --ink: #0a0908;
-  --ink-2: #131110;
-  --paper: #1c1815;
-  --paper-edge: #35302a;
+  /* The four base colors. */
+  --room: #0f1216;
+  --paper: #e4dfd3;
+  --ink: #14171b;
+  --lamp: #c9a227;
 
-  --brass: #c9a227;
-  --brass-dim: #8a6f1f;
-  --blood: #8c2a2a;
-  --blood-bright: #b83636;
-  --steel: #6c8a9a;
-  --steel-dim: #3d525c;
+  /* Documented mixes of the four base colors. Nothing else. */
+  --paper-edge: color-mix(in srgb, var(--paper) 88%, var(--ink));
+  --ink-quiet: color-mix(in srgb, var(--ink) 55%, var(--paper));
+  --ink-faint: color-mix(in srgb, var(--ink) 25%, var(--paper));
+  --room-lift: color-mix(in srgb, var(--room) 92%, var(--paper));
+  --lamp-quiet: color-mix(in srgb, var(--lamp) 45%, var(--room));
 
-  --ink-text: #eae4d8;
-  --ink-text-dim: #a89e8e;
+  /* Two families. Serif for testimony, mono for the record. */
+  --face-hand: "Newsreader", Georgia, serif;
+  --face-rec: "Space Mono", ui-monospace, monospace;
 
-  --font-display: "Playfair Display", Georgia, serif;
-  --font-body: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: "Courier New", ui-monospace, monospace;
+  /* Spacing scale: 8, 16, 24, 40, 64. Nothing between them. Every layout
+     rule uses the -t (tension-scaled) variant, never the raw value. */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 40px;
+  --space-5: 64px;
 
-  font-family: var(--font-body);
-  font-size: clamp(16px, 1vw + 14px, 19px);
+  /* 0 at round 1, 1 at the final round. Set once per round in JS once a
+     round-aware component exists to set it (not yet -- see
+     BLACKHAND_PROGRESS.md). Spacing and motion duration both read this
+     today regardless, so the token is live the moment it's set. */
+  --tension: 0;
+  --tension-scale: calc(1 - var(--tension) * 0.35);
+  --space-1-t: calc(var(--space-1) * var(--tension-scale));
+  --space-2-t: calc(var(--space-2) * var(--tension-scale));
+  --space-3-t: calc(var(--space-3) * var(--tension-scale));
+  --space-4-t: calc(var(--space-4) * var(--tension-scale));
+  --space-5-t: calc(var(--space-5) * var(--tension-scale));
+
+  /* Motion duration: 400ms at tension 0, 160ms at tension 1. */
+  --motion-duration: calc(400ms - 240ms * var(--tension));
+  --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-hard: cubic-bezier(0.32, 0, 0.67, 0);
+
+  font-family: var(--face-hand);
+  font-size: 16px;
+  color: var(--paper);
 }
 
 * {
@@ -49,36 +72,21 @@
 
 body {
   margin: 0;
-  color: var(--ink-text);
-  background: radial-gradient(ellipse at top, var(--ink-2) 0%, var(--ink) 60%), var(--ink);
-  transition: filter 0.5s ease;
-}
-
-body[data-phase="night"] {
-  background: radial-gradient(ellipse at top, #0e1418 0%, #050607 65%), #050607;
-}
-
-body[data-phase="day_discussion"],
-body[data-phase="voting"] {
-  background: radial-gradient(ellipse at top, #1b160f 0%, var(--ink) 60%), var(--ink);
-}
-
-/* The one and only desaturation rule in the system: death drains the color out. */
-body[data-dead="true"] {
-  filter: grayscale(1) brightness(0.85);
+  background: var(--room);
+  color: var(--paper);
 }
 
 #root {
   max-width: 560px;
   margin: 0 auto;
   min-height: 100vh;
-  padding: 20px 18px 40px;
+  padding: var(--space-3-t) var(--space-2-t) var(--space-4-t);
 }
 
 .screen {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: var(--space-3-t);
 }
 
 .screen.center {
@@ -87,196 +95,269 @@ body[data-dead="true"] {
   padding-top: 14vh;
 }
 
-.title {
-  font-family: var(--font-display);
-  font-size: 2.6rem;
-  letter-spacing: 0.14em;
-  margin: 0.1em 0 0.3em;
-  color: var(--brass);
-  text-shadow: 0 0 24px rgba(201, 162, 39, 0.3), 0 2px 0 #000;
-}
-
-h2 {
-  margin: 0 0 12px;
-  font-family: var(--font-mono);
-  font-size: 1.05rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--brass);
-  border-bottom: 1px solid var(--paper-edge);
-  padding-bottom: 10px;
-}
-
-h3 {
-  font-family: var(--font-mono);
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-text-dim);
-  margin: 0.8em 0 0.5em;
-}
-
-.muted {
-  color: var(--ink-text-dim);
-  font-size: 1rem;
-  line-height: 1.5;
-}
-
-.card {
-  position: relative;
-  background: linear-gradient(180deg, var(--ink-2), var(--paper));
-  border: 1px solid var(--paper-edge);
-  border-radius: 3px;
-  padding: 22px 20px 20px;
-  width: 100%;
-  font-size: 1.05rem;
-  line-height: 1.5;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
-}
-
-.card.center {
+.center {
   text-align: center;
 }
 
-.card-tab {
-  position: absolute;
-  top: -13px;
-  left: 16px;
-  padding: 3px 12px;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 700;
+/* -- Type scale (section 4.3). ------------------------------------------ */
+
+.t-whisper {
+  font-family: var(--face-rec);
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  border-radius: 2px 2px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.t-record {
+  font-family: var(--face-rec);
+  font-size: 13px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.t-body {
+  font-family: var(--face-hand);
+  font-size: 16px;
+  line-height: 1.6;
+  font-weight: 400;
+}
+
+.t-name {
+  font-family: var(--face-hand);
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 500;
+}
+
+.t-said {
+  font-family: var(--face-hand);
+  font-size: 28px;
+  line-height: 1.35;
+  font-weight: 400;
+}
+
+.t-event {
+  font-family: var(--face-hand);
+  font-size: 44px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.t-verdict {
+  font-family: var(--face-hand);
+  font-size: 72px;
+  line-height: 0.95;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+/* -- Motion vocabulary (section 4.7). Paper is placed, stamped, unfolded,
+      or taken. Nothing else happens to it. ------------------------------ */
+
+@keyframes bh-placed {
+  from {
+    transform: translateY(120px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes bh-stamped {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes bh-unfolded {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes bh-taken {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(120px);
+  }
+}
+
+.motion-placed {
+  animation: bh-placed var(--motion-duration) var(--ease-soft) both;
+}
+
+.motion-stamped {
+  animation: bh-stamped 90ms cubic-bezier(0.34, 1.2, 0.64, 1) both;
+}
+
+.motion-unfolded {
+  animation: bh-unfolded 420ms var(--ease-soft) both;
+  transform-origin: top;
+}
+
+.motion-taken {
+  animation: bh-taken 140ms var(--ease-hard) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-placed,
+  .motion-unfolded,
+  .motion-taken {
+    animation: none;
+  }
+  .motion-stamped {
+    animation-duration: 40ms;
+  }
+}
+
+/* -- Paper: a surface holding information a player earned. --------------- */
+
+.card {
+  background: var(--paper);
   color: var(--ink);
+  border-radius: 0;
+  padding: var(--space-3-t) var(--space-2-t);
+  width: 100%;
+  box-shadow: 2px 2px var(--room);
 }
 
-.card-tab.tab-brass {
-  background: var(--brass);
+.card .muted {
+  color: var(--ink-quiet);
 }
 
-.card-tab.tab-blood {
-  background: var(--blood-bright);
-  color: var(--ink-text);
-}
-
-.card-tab.tab-steel {
-  background: var(--steel);
-}
+/* -- Chrome: lines drawn on the room, never paper. ------------------------ */
 
 .topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 2px 14px;
-  border-bottom: 1px solid var(--paper-edge);
+  padding-bottom: var(--space-2-t);
+  border-bottom: 1px solid var(--ink-faint);
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-1-t);
 }
 
 .room-code {
-  font-family: var(--font-mono);
+  font-family: var(--face-rec);
   font-weight: 700;
-  letter-spacing: 0.18em;
-  color: var(--brass);
+  letter-spacing: 0.1em;
+  color: var(--paper);
+}
+
+.title {
+  font-family: var(--face-hand);
+  font-weight: 600;
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--paper);
+  margin: 0.2em 0;
+}
+
+.credit {
+  font-family: var(--face-rec);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+  margin: -0.6em 0 0.6em;
+}
+
+.muted {
+  color: var(--ink-quiet);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.error {
+  font-family: var(--face-rec);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--paper);
+}
+
+input {
+  width: 100%;
+  background: var(--room);
+  color: var(--paper);
+  border: 1px solid var(--ink-faint);
+  border-radius: 0;
+  padding: var(--space-1-t) var(--space-2-t);
+  font-family: var(--face-hand);
+  font-size: 16px;
+  margin-bottom: var(--space-1-t);
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--paper-edge);
+}
+
+/* Buttons are chrome, not paper: a line on the room, not a filled block.
+   "Selected" is the one exception -- an ink stamp, filled and solid,
+   because a chosen answer is a committed mark, not a hover state. */
+button {
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid var(--ink-faint);
+  border-radius: 0;
+  padding: var(--space-1-t) var(--space-2-t);
+  font-family: var(--face-rec);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  width: 100%;
+  margin-bottom: var(--space-1-t);
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--paper-edge);
+}
+
+button:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+button.primary {
+  border-color: var(--paper-edge);
+}
+
+button.ghost {
+  color: var(--ink-quiet);
+  border-color: var(--ink-faint);
+}
+
+button.selected {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+  font-weight: 700;
 }
 
 .sound-toggle {
   width: auto;
   margin: 0;
-  padding: 6px 10px;
-  font-size: 0.85rem;
-  background: transparent;
-  border: 1px solid var(--paper-edge);
-  color: var(--ink-text-dim);
-}
-
-input {
-  width: 100%;
-  padding: 11px 12px;
-  border-radius: 3px;
-  border: 1px solid var(--paper-edge);
-  background: var(--ink);
-  color: var(--ink-text);
-  font-size: 1rem;
-  font-family: var(--font-body);
-  margin-bottom: 8px;
-}
-
-input:focus {
-  outline: none;
-  border-color: var(--brass-dim);
-}
-
-button {
-  padding: 11px 14px;
-  border-radius: 3px;
-  border: 1px solid var(--paper-edge);
-  background: transparent;
-  color: var(--ink-text);
-  font-family: var(--font-body);
-  font-weight: 600;
-  font-size: 1rem;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  width: 100%;
-  margin-bottom: 6px;
-  transition: filter 0.15s ease, background 0.15s ease;
-}
-
-/* Primary action: neutral, official-looking. Brass outline, not filled --
-   filled brass is reserved for "this is now selected/confirmed" so a
-   button's own resting state never looks pre-selected. */
-button.primary {
-  border-color: var(--brass-dim);
-  color: var(--brass);
-}
-
-button.primary:hover:not(:disabled) {
-  background: rgba(201, 162, 39, 0.1);
-}
-
-/* Destructive: the only place solid blood-red fill appears as a default
-   button state. Reserved for kill / lynch-vote actions specifically. */
-button.danger {
-  background: linear-gradient(180deg, var(--blood-bright), var(--blood));
-  border-color: var(--blood);
-}
-
-button.danger:hover:not(:disabled) {
-  filter: brightness(1.15);
-}
-
-button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-  filter: none;
-}
-
-/* Selected / confirmed state: filled brass, always, regardless of the
-   button's own type. This is the single "you chose this" signal. */
-button.selected {
-  background: linear-gradient(180deg, var(--brass), var(--brass-dim));
-  border-color: var(--brass-dim);
-  color: var(--ink);
-  font-weight: 700;
-}
-
-button.ghost {
-  background: transparent;
-  color: var(--ink-text-dim);
-  border: 1px dashed var(--paper-edge);
 }
 
 .row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-1-t);
   align-items: center;
 }
 
@@ -289,78 +370,97 @@ button.ghost {
   flex-shrink: 0;
 }
 
+/* -- Players. No per-player color: identity is the name, not a hue. ------ */
+
 .player-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-1-t);
 }
 
 .player-row {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-1-t);
   text-align: left;
+}
+
+.lobby-player {
+  padding: var(--space-1-t) var(--space-2-t);
+  border: 1px solid var(--paper-edge);
 }
 
 .avatar {
   flex-shrink: 0;
   width: 34px;
   height: 34px;
-  border-radius: 3px;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-mono);
+  border: 1px solid currentColor;
+  font-family: var(--face-rec);
   font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--ink);
+  font-size: 12px;
 }
 
 .player-row-name {
   flex: 1;
-  font-weight: 600;
+  font-family: var(--face-hand);
+  font-size: 20px;
+  font-weight: 500;
 }
 
-.player-row-tag {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  color: inherit;
-  opacity: 0.85;
+.player-row-tag,
+.player-row-offline {
+  font-family: var(--face-rec);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .player-row-dead {
-  font-weight: 400;
-  font-style: normal;
-  color: var(--blood-bright);
-  font-size: 0.85em;
+  font-family: var(--face-rec);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.player-row-offline {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
-  color: var(--ink-text-dim);
-  border: 1px solid var(--paper-edge);
-  padding: 2px 6px;
-  border-radius: 2px;
+/* -- Role info. -------------------------------------------------------- */
+
+.role-badge {
+  font-family: var(--face-hand);
+  font-size: 20px;
+  margin: 0 0 var(--space-1-t);
+}
+
+.role-secret {
+  font-family: var(--face-rec);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border: 1px solid var(--ink-faint);
+  padding: var(--space-1-t);
+  margin: 0 0 var(--space-2-t);
+}
+
+.role-config {
+  margin: var(--space-2-t) 0;
 }
 
 .role-config .row {
   justify-content: space-between;
-  margin-bottom: 6px;
 }
 
 .role-config label {
-  font-family: var(--font-mono);
+  font-family: var(--face-rec);
+  font-size: 13px;
   text-transform: uppercase;
-  font-size: 0.8rem;
-  letter-spacing: 0.06em;
-  color: var(--ink-text-dim);
+  letter-spacing: 0.04em;
   flex: 1;
 }
 
@@ -368,23 +468,200 @@ button.ghost {
   width: 36px;
 }
 
-.role-badge {
+.role-explainer-item {
+  margin-bottom: var(--space-2-t);
+}
+
+.role-explainer-item:last-child {
+  margin-bottom: 0;
+}
+
+.role-explainer-name {
+  font-family: var(--face-rec);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 2px;
+}
+
+/* -- The Dark: dimmed, quiet, no lamp except the one who must act. -------- */
+
+.silent-banner {
+  width: 100%;
+  text-align: center;
+  padding: var(--space-3-t) var(--space-2-t);
+  border: 1px solid var(--ink-faint);
+}
+
+.silent-banner-text {
+  font-family: var(--face-rec);
+  font-size: 20px;
+  letter-spacing: 0.2em;
+  margin: 0 0 var(--space-1-t);
+}
+
+.night-progress {
+  font-family: var(--face-rec);
+  font-size: 13px;
+  text-align: center;
+  margin: var(--space-1-t) 0 var(--space-2-t);
+}
+
+/* -- Elimination: paper going dark, not a colored warning. ---------------- */
+
+.dead-panel {
+  width: 100%;
+  text-align: center;
+}
+
+.eliminated-stamp {
+  display: inline-block;
+  border: 2px solid var(--ink);
+  padding: var(--space-1-t) var(--space-3-t);
+  font-family: var(--face-rec);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  transform: rotate(-4deg);
+  margin: var(--space-1-t) 0;
+}
+
+.dead-panel-sub {
+  font-family: var(--face-hand);
+  font-size: 20px;
+  margin: var(--space-1-t) 0 0;
+}
+
+/* -- The Ledger: the record, always mono. --------------------------------- */
+
+.round-log {
+  width: 100%;
+  text-align: left;
+  margin-top: var(--space-2-t);
+  padding-top: var(--space-2-t);
+  border-top: 1px solid var(--ink-faint);
+}
+
+.round-log-entry {
+  margin-bottom: var(--space-2-t);
+}
+
+.round-log-title {
+  font-family: var(--face-rec);
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   margin: 0 0 4px;
-  letter-spacing: 0.02em;
 }
 
-.role-badge strong {
-  color: var(--brass);
+.round-log-line {
+  font-family: var(--face-rec);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 2px 0;
 }
 
-.error {
-  color: var(--blood-bright);
-  font-weight: 600;
+.log {
+  text-align: left;
 }
 
-/* Visually hidden but still read by screen readers -- used for the phase
-   announcer, which has no visible element of its own (the visible cues
-   are the sound, the banner, and the background shift). */
+.log p {
+  font-family: var(--face-rec);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: var(--space-1-t) 0;
+}
+
+.private-log {
+  font-weight: 700;
+}
+
+.winner-names {
+  font-family: var(--face-hand);
+  font-size: 28px;
+  font-weight: 500;
+  margin: 0 0 var(--space-2-t);
+}
+
+.game-over-actions {
+  margin-top: var(--space-3-t);
+  padding-top: var(--space-2-t);
+  border-top: 1px solid var(--ink-faint);
+}
+
+/* -- The Black Hand: never paper, room ground with lamp text, always. ----- */
+
+.mafia-chat {
+  background: var(--room);
+  color: var(--lamp);
+  border: 1px solid var(--lamp-quiet);
+  box-shadow: none;
+}
+
+.mafia-chat .muted,
+.mafia-chat h2 {
+  color: var(--lamp-quiet);
+}
+
+.chat-log {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-1-t);
+}
+
+.chat-log p {
+  font-family: var(--face-rec);
+  font-size: 13px;
+  margin: 2px 0;
+}
+
+/* -- Timer: one of the three places lamp is allowed to appear. ------------ */
+
+.ring-timer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-t);
+}
+
+.ring-timer-label {
+  font-family: var(--face-rec);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--ink-quiet);
+}
+
+.ring-timer-value {
+  font-family: var(--face-rec);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+h2 {
+  font-family: var(--face-rec);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--ink-faint);
+  padding-bottom: var(--space-1-t);
+  margin: 0 0 var(--space-2-t);
+}
+
+h3 {
+  font-family: var(--face-rec);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-quiet);
+  margin: var(--space-2-t) 0 var(--space-1-t);
+}
+
+/* Visually hidden but still read by screen readers. */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -395,201 +672,4 @@ button.ghost {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-.chat-log {
-  max-height: 220px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.log p {
-  margin: 6px 0;
-  font-size: 1rem;
-  line-height: 1.5;
-}
-
-.private-log {
-  color: var(--steel);
-  font-weight: 600;
-}
-
-.lobby-player {
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 3px;
-}
-
-/* Spotlight vignette for the silent-night state: a lit interrogation-room
-   feel. Deliberately distinct from the dead player's grayscale treatment
-   so the two "you can't talk" states never look alike. */
-.silent-banner {
-  width: 100%;
-  text-align: center;
-  padding: 32px 20px;
-  border-radius: 3px;
-  background: radial-gradient(ellipse at center, rgba(108, 138, 154, 0.16) 0%, rgba(10, 9, 8, 0.4) 75%);
-  border: 1px solid var(--steel-dim);
-}
-
-.silent-banner.compact {
-  padding: 14px 16px;
-  margin-bottom: 16px;
-}
-
-.silent-banner-text {
-  margin: 0 0 8px;
-  font-family: var(--font-mono);
-  font-size: clamp(1.4rem, 4.5vw, 1.9rem);
-  font-weight: 700;
-  letter-spacing: 0.28em;
-  color: var(--steel);
-}
-
-.silent-banner.compact .silent-banner-text {
-  font-size: clamp(1.1rem, 3.5vw, 1.4rem);
-  margin: 0;
-}
-
-.night-progress {
-  font-family: var(--font-mono);
-  font-size: 0.95rem;
-  color: var(--brass);
-  text-align: center;
-  margin: 8px 0 16px;
-}
-
-.credit {
-  font-family: var(--font-mono);
-  color: var(--ink-text-dim);
-  font-size: 0.85rem;
-  letter-spacing: 0.08em;
-  margin: -0.4em 0 0.8em;
-}
-
-.role-secret {
-  font-family: var(--font-mono);
-  color: var(--brass);
-  font-weight: 700;
-  font-size: 0.82rem;
-  letter-spacing: 0.03em;
-  margin: 0 0 10px;
-}
-
-.role-explainer {
-  text-align: left;
-  width: 100%;
-}
-
-.role-explainer-item {
-  margin-bottom: 14px;
-}
-
-.role-explainer-item:last-child {
-  margin-bottom: 0;
-}
-
-.role-explainer-name {
-  font-family: var(--font-mono);
-  color: var(--brass);
-  font-weight: 700;
-  font-size: 1rem;
-  letter-spacing: 0.04em;
-  margin: 0 0 2px;
-}
-
-/* Death: no banner box at all. The grayscale on body[data-dead] already
-   carries the whole signal; this stamp is the only added element, and it
-   desaturates along with everything else -- it never fights the effect. */
-.eliminated-stamp {
-  display: inline-block;
-  margin: 10px auto 6px;
-  padding: 8px 22px;
-  border: 3px solid var(--blood-bright);
-  border-radius: 4px;
-  transform: rotate(-6deg);
-  font-family: var(--font-mono);
-  font-size: 1.3rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  color: var(--blood-bright);
-}
-
-.dead-panel {
-  width: 100%;
-  text-align: center;
-  padding: 20px;
-}
-
-.dead-panel-sub {
-  font-weight: 600;
-  margin: 6px 0 4px;
-}
-
-.winner-names {
-  font-family: var(--font-mono);
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: var(--brass);
-  margin: 0 0 16px;
-  letter-spacing: 0.03em;
-}
-
-.round-log {
-  width: 100%;
-  text-align: left;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--paper-edge);
-}
-
-.round-log-entry {
-  margin-bottom: 14px;
-}
-
-.round-log-title {
-  font-family: var(--font-mono);
-  color: var(--brass);
-  font-weight: 700;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin: 0 0 4px;
-}
-
-.round-log-line {
-  margin: 2px 0;
-  font-size: 1rem;
-  line-height: 1.5;
-}
-
-.game-over-actions {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--paper-edge);
-}
-
-/* Circular countdown ring. Color itself carries the urgency signal:
-   steel with plenty of time, brass in the last third, blood in the
-   final ten seconds -- synced to the tick sound at the same threshold. */
-.ring-timer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ring-timer-label {
-  font-family: var(--font-mono);
-  font-size: 0.95rem;
-  letter-spacing: 0.05em;
-  color: var(--ink-text-dim);
-}
-
-.ring-timer-value {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }

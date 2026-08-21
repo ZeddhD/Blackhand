@@ -1,29 +1,24 @@
 export const ROLE_INFO = {
-  villager: {
-    key: "villager",
+  civilian: {
+    key: "civilian",
     label: "Civilian",
-    text: "No special power. Talk during the day and vote to catch the Mafia.",
+    text: "No special power. Talk during the day and vote at the table.",
   },
-  detective: {
-    key: "detective",
-    label: "Police",
-    text: "Each night, check one player. Learn if they are guilty or innocent.",
+  inspector: {
+    key: "inspector",
+    label: "Inspector",
+    text: "Each night, investigate one player. Learn whether they read as Table or Hand.",
   },
-  doctor: {
-    key: "doctor",
-    label: "Healer",
-    text: "Each night, protect one player from the Mafia kill.",
+  watchman: {
+    key: "watchman",
+    label: "Watchman",
+    text: "Each night, protect one player from the Hand's target. Cannot protect the same player two nights running.",
   },
-  mafia: {
-    key: "mafia",
-    label: "Mafia",
-    text: "Each night, the Mafia team picks one player to kill together.",
-  },
-  godfather: {
-    key: "godfather",
-    label: "Godfather",
+  hand: {
+    key: "hand",
+    label: "Hand",
     text:
-      "Secretly leads the Mafia. Has no power while other Mafia are alive. Always looks innocent to the Police. If all other Mafia die, becomes the new Mafia.",
+      "Each night, the Black Hand chooses together: kill a player, or offer one Table player a place in the Hand.",
   },
 };
 

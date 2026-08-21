@@ -11,8 +11,7 @@ export default function MafiaChat({ messages, onSend }) {
 
   return (
     <div className="card mafia-chat">
-      <div className="card-tab tab-blood">Private</div>
-      <h2>Mafia Channel</h2>
+      <h2>The Black Hand</h2>
       <div className="chat-log">
         {messages.map((m, i) => (
           <p key={i}>
@@ -22,7 +21,7 @@ export default function MafiaChat({ messages, onSend }) {
       </div>
       <div className="row">
         <input
-          placeholder="Message the mafia..."
+          placeholder="Message the Hand..."
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}

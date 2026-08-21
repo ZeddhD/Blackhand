@@ -37,6 +37,8 @@ const PHASE_ANNOUNCEMENT = {
   night: "Night has fallen. Stay silent.",
   day_discussion: "Day discussion has begun.",
   voting: "Voting is open.",
+  show_hands: "Show Your Hands has begun.",
+  offer: "The Offer is being made.",
   game_over: "The game has ended.",
 };
 
@@ -133,11 +135,11 @@ export default function App() {
   if (!state) {
     return (
       <div className="screen center">
-        <h1 className="title">MAFIA</h1>
+        <h1 className="title">BLACKHAND</h1>
         <p className="credit">made by ZeddhD</p>
         <p className="muted">{connected ? "Ready." : "Connecting..."}</p>
         <div className="card">
-          <div className="card-tab tab-brass">Join</div>
+          <h2>Join</h2>
           <input
             placeholder="Your name"
             maxLength={24}
@@ -210,16 +212,13 @@ export default function App() {
 
       {state.phase !== "lobby" && state.phase !== "game_over" && (
         <div className="card">
-          <div className="card-tab tab-brass">Your Role</div>
+          <h2>Your Role</h2>
           <p className="role-badge">
             You are: <strong>{roleLabel(state.your_role)}</strong>
           </p>
           <p className="role-secret">Do not reveal your role until the game ends.</p>
           {state.allies?.length > 0 && (
-            <p className="muted">Fellow Mafia: {state.allies.join(", ")}</p>
-          )}
-          {state.known_mafia?.length > 0 && (
-            <p className="muted">You secretly know the Mafia: {state.known_mafia.join(", ")}</p>
+            <p className="muted">Fellow Hand: {state.allies.join(", ")}</p>
           )}
         </div>
       )}
@@ -236,13 +235,12 @@ export default function App() {
         />
       )}
 
-      {!isDead && state.your_role === "mafia" && state.phase === "night" && (
+      {!isDead && state.your_role === "hand" && state.phase === "night" && (
         <MafiaChat messages={mafiaChat} onSend={sendMafiaChat} />
       )}
 
       {!isDead && state.phase === "day_discussion" && (
         <div className="card">
-          <div className="card-tab tab-brass">Day</div>
           <h2>Day Discussion</h2>
           <p className="muted">Talk it out over voice. Voting starts when the timer ends.</p>
           <ul className="player-list">
@@ -257,7 +255,6 @@ export default function App() {
 
       {!isDead && state.phase === "voting" && (
         <div className="card">
-          <div className="card-tab tab-blood">Vote</div>
           <h2>Vote to Remove a Player</h2>
           <p className="muted">
             Voting ends when the timer runs out, or as soon as everyone has voted.
@@ -272,7 +269,6 @@ export default function App() {
               <li key={p.id}>
                 <PlayerRow
                   name={p.name}
-                  danger
                   selected={state.votes[playerId] === p.id}
                   tag={state.votes[playerId] === p.id ? "YOUR VOTE" : null}
                   offline={state.connected?.[p.id] === false}
@@ -303,7 +299,6 @@ export default function App() {
 function RoleExplainer() {
   return (
     <div className="card role-explainer">
-      <div className="card-tab tab-steel">How to Play</div>
       <h2>Roles</h2>
       {Object.values(ROLE_INFO).map((r) => (
         <div key={r.key} className="role-explainer-item">
@@ -316,13 +311,12 @@ function RoleExplainer() {
 }
 
 function Lobby({ state, isHost, onStart, onLeave, roomCode }) {
-  const [roleCounts, setRoleCounts] = useState({ mafia: 1, detective: 1, doctor: 1, godfather: 0 });
+  const [roleCounts, setRoleCounts] = useState({ hand: 1, inspector: 1, watchman: 1 });
   const [discussion, setDiscussion] = useState(60);
   const [voting, setVoting] = useState(60);
 
   return (
     <div className="card">
-      <div className="card-tab tab-brass">Lobby</div>
       <h2>Waiting Room</h2>
       <p className="muted">
         Share the code above. Players join at <span className="room-code">{roomCode}</span> on their devices.
@@ -381,7 +375,9 @@ const ACTION_TITLE = {
 
 function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAction }) {
   const role = state.your_role;
-  const actionByRole = { mafia: "kill", doctor: "protect", detective: "investigate" };
+  // Hand's night action defaults to a kill target here; choosing the Offer
+  // instead (section 2.3) has no UI yet -- that arrives with the Offer beat.
+  const actionByRole = { hand: "kill", watchman: "protect", inspector: "investigate" };
   const actionType = actionByRole[role];
 
   const progress =
@@ -402,19 +398,18 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
   }
 
   const targets = actionType === "protect" ? state.players.filter((p) => p.alive) : others.filter((p) => p.alive);
-  const selectedId = role === "mafia" ? state.mafia_kill_target_id : selectedTarget;
+  const selectedId = role === "hand" ? state.hand_target_id : selectedTarget;
 
   return (
     <div className="card">
-      <div className="card-tab tab-blood">Night</div>
       <div className="silent-banner compact">
         <p className="silent-banner-text">STAY SILENT</p>
       </div>
       <h2>{ACTION_TITLE[actionType]}</h2>
-      {role === "mafia" && (
+      {role === "hand" && (
         <p className="muted">
-          {state.mafia_kill_target_name
-            ? `Team target: ${state.mafia_kill_target_name}. Any Mafia member can change it.`
+          {state.hand_target_name
+            ? `Team target: ${state.hand_target_name}. Any Hand member can change it.`
             : "No target chosen yet."}
         </p>
       )}
@@ -424,7 +419,6 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
           <li key={p.id}>
             <PlayerRow
               name={p.name}
-              danger={actionType === "kill"}
               selected={selectedId === p.id}
               offline={state.connected?.[p.id] === false}
               onClick={() => {
@@ -442,7 +436,6 @@ function NightPanel({ state, others, selectedTarget, setSelectedTarget, nightAct
 function DeadPanel({ state }) {
   return (
     <div className="card dead-panel">
-      <div className="card-tab tab-blood">Eliminated</div>
       <span className="eliminated-stamp">ELIMINATED</span>
       <p className="dead-panel-sub">You cannot talk or use voice chat for the rest of the game.</p>
       <p className="muted">You can now see everything that happens, round by round.</p>
@@ -471,20 +464,19 @@ function RoundLog({ log }) {
 }
 
 function GameOverPanel({ state, onReturnToLobby, onLeave }) {
-  const mafiaWon = state.winner === "mafia";
+  const handWon = state.winner === "hand";
   return (
     <div className="card center">
-      <div className={`card-tab ${mafiaWon ? "tab-blood" : "tab-brass"}`}>Case Closed</div>
-      <h1 className="title">{mafiaWon ? "Mafia Win" : "Civilians Win"}</h1>
-      {mafiaWon ? (
+      <h1 className="title">{handWon ? "The Black Hand Wins" : "The Table Wins"}</h1>
+      {handWon ? (
         <>
-          <p className="muted">The winning Mafia:</p>
-          <p className="winner-names">{state.mafia_reveal?.join(", ")}</p>
+          <p className="muted">The winning Hand:</p>
+          <p className="winner-names">{state.hand_reveal?.join(", ")}</p>
         </>
       ) : (
         <>
-          <p className="muted">The Mafia were caught. They were:</p>
-          <p className="winner-names">{state.mafia_reveal?.join(", ") || "no one"}</p>
+          <p className="muted">The Black Hand was caught. They were:</p>
+          <p className="winner-names">{state.hand_reveal?.join(", ") || "no one"}</p>
         </>
       )}
       <RoundLog log={state.round_log} />
@@ -518,7 +510,6 @@ function EventLog({ events, privateLog }) {
   if (!events?.length && !privateLog?.length) return null;
   return (
     <div className="card log">
-      <div className="card-tab tab-steel">Log</div>
       {privateLog?.map((msg, i) => (
         <p key={`p${i}`} className="private-log">
           {msg}

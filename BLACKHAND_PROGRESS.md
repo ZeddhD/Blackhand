@@ -5,7 +5,7 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 5 complete. Phase 6 not started.**
+**Current status: Phase 6 complete. Phase 7 not started.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -454,4 +454,137 @@ per the phase's own acceptance criteria:**
   the current deployed frontend's stale role names, and this phase adds
   two more message types the frontend doesn't know about yet either.
 
-## Phases 6 through 15: not started
+## Phase 6: Design tokens (done)
+
+**Files touched:** `frontend/index.html`, `frontend/src/index.css` (full
+rewrite), `frontend/src/components/Avatar.jsx` (full rewrite),
+`frontend/src/components/Timer.jsx` (full rewrite),
+`frontend/src/components/PlayerRow.jsx` (full rewrite),
+`frontend/src/components/RoleConfig.jsx`, `frontend/src/components/MafiaChat.jsx`,
+`frontend/src/roles.js` (full rewrite), `frontend/src/App.jsx` (full rewrite).
+
+**The token system (section 4), verified by grep:** exactly four hex
+colors exist (`--room #0f1216`, `--paper #e4dfd3`, `--ink #14171b`, `--lamp
+#c9a227`) plus exactly five documented `color-mix()` derivatives
+(`--paper-edge`, `--ink-quiet`, `--ink-faint`, `--room-lift`,
+`--lamp-quiet`). No hex color exists anywhere outside `index.css`. Every
+`border-radius` is `0`, every `box-shadow` is a flat 2px offset or `none`
+(no blur term), zero gradients. Two font families (Newsreader serif for
+testimony, Space Mono for the record) loaded via Google Fonts, split
+strictly by the type-scale classes (`.t-whisper` through `.t-verdict`).
+Spacing is entirely gated through `--tension` (0 today, no round-aware
+component sets it yet -- noted below). Four motion keyframes
+(`bh-placed/stamped/unfolded/taken`) exist as utility classes with a
+`prefers-reduced-motion` override. Lamp appears in exactly three places:
+the timer's last-10-seconds state, and the two Black Hand private-surface
+rules in `.mafia-chat`.
+
+**A real functional bug was found and fixed that went beyond this
+phase's stated CSS-only scope, for the same reason Phase 1 needed one
+forced cross-file rename: the frontend had never been touched by Phases
+1-5 at all.** `roles.js` and `RoleConfig.jsx`'s `CONFIGURABLE_ROLES` still
+used the pre-migration role keys (`villager/detective/doctor/mafia/godfather`).
+Since the server's `ROLE_BY_NAME` only recognizes
+`civilian/inspector/watchman/hand` (Phase 1), the host's role-count
+config UI was silently sending a payload the server would filter down to
+nothing -- no game could ever be started from the live frontend, at all,
+regardless of styling. Fixed: `roles.js` rewritten with the correct role
+keys and Blackhand labels/text (Civilian/Inspector/Watchman/Hand, no
+Godfather), `RoleConfig.jsx`'s `CONFIGURABLE_ROLES` updated to
+`["hand", "inspector", "watchman"]`. `App.jsx` was audited and fixed the
+same way: `your_role === "mafia"` checks now read `"hand"`,
+`mafia_kill_target_id/name` reads now read `hand_target_id/name`,
+`mafia_reveal` reads now read `hand_reveal`, `winner === "mafia"` now
+reads `winner === "hand"`, the dead `known_mafia` field (no Godfather
+equivalent exists) was removed entirely, and the default lobby role-count
+state changed from `{ mafia, detective, doctor, godfather }` to
+`{ hand, inspector, watchman }`. Verified live: a full
+create-room-through-role-assignment round trip against a running server
+with the new role-count keys correctly produces `hand`/`inspector`/
+`watchman`/`civilian` roles and a working `allies` list for both Hand
+players, then the disposable verification script was deleted per
+established practice.
+
+**Also removed as part of the same necessary-for-function pass:** every
+`<div className="card-tab tab-*">` label in every component (those
+classes were deliberately deleted from the new `index.css`, since the new
+system has no per-card colored-tab concept). Each card's existing `<h2>`
+now serves as its own header (the type-scale/border-bottom styling on
+`h2` already does this job); cards that only had a tab and no separate
+`h2` (Join, Your Role, Lobby) got a plain `h2` added in the tab's place.
+`PlayerRow`'s `danger` prop (a kill/protect/vote color-severity variant)
+was deleted along with its one remaining CSS hook, per section 4.2's "no
+red anywhere, the weight of a choice comes from context and copy, never a
+color" rule -- confirmed via grep that no `danger` prop reference remains
+anywhere in `frontend/src`.
+
+**Decisions made, not fully specified in the document:**
+- **The lobby's minimum player-count gate stayed at 4**, not the 6 from
+  section 3.1's player-count table. That table's floor/ceiling was already
+  flagged as not-yet-enforced back in Phase 1 (`GameConfig.validate()` has
+  no floor/ceiling), and adding it here would be scope creep into
+  server-side validation this phase doesn't touch. Left as a known,
+  pre-existing gap, not a new one.
+- **No placeholder UI was built for `Phase.SHOW_HANDS` or `Phase.OFFER`.**
+  Both phases exist in the engine and the room cascade (Phases 2, 3, 5)
+  and the live verification round actually entered `show_hands` directly
+  (6 players hits the default threshold), but there is deliberately no
+  vote-casting or offer-response panel yet -- that's Phase 9/10's Show
+  Your Hands beat and Phase 12's Offer UI, not this phase's file list.
+  During those phases today, a player sees their role card and the event
+  log but no action panel, which is an accurate "not built yet" state, not
+  a crash: nothing in `App.jsx` throws or renders blank/broken markup for
+  those phase values, confirmed by the live round above landing on
+  `show_hands` without error. Deliberately not papered over with "coming
+  soon" placeholder copy, per the standing "no half-finished
+  implementations" rule -- an honest gap beats a fake one.
+- **`--tension` is defined and consumed but nothing sets it away from 0
+  yet.** No component in the current tree is round-number-aware in a way
+  that would justify writing that wiring now; the token chain
+  (`--tension` -> `--tension-scale` -> every `-t` spacing variable and
+  `--motion-duration`) is verified live end-to-end by construction (it's
+  plain CSS `calc()`, not JS), just inert until some later phase's
+  component actually assigns `--tension` from `night_number`/round count.
+
+**Acceptance criteria, all verified:**
+- `npm run build` succeeds with zero errors.
+- Exactly 4 hex colors and exactly 5 `color-mix()` derivatives exist in
+  the whole tree, both confirmed by grep, with zero hex colors outside
+  `index.css`.
+- Zero non-`0` `border-radius`, zero blurred `box-shadow`, zero gradients.
+- Zero occurrences of `godfather|villager|mafia|detective|doctor` as
+  role/display vocabulary anywhere in `frontend/src` (protocol-plumbing
+  strings that must match the server's existing WebSocket message
+  contract unchanged -- `mafia_chat` the message type, `mafiaChat`/
+  `MafiaChat` the existing component/prop names, `mafia_room_code`/
+  `mafia_player_id` the localStorage keys -- were deliberately left alone,
+  since renaming them is a protocol change with no visible-copy benefit
+  and out of this phase's scope).
+- Zero em dashes anywhere in `frontend/src`.
+- Zero references to the deleted `card-tab`/`tab-brass`/`tab-blood`/
+  `tab-steel` classes anywhere in `frontend/src`.
+- `tests/` still 79/79 passing (no engine changes this phase).
+- Live verification: a full 6-player game created and started against a
+  running server using the new role-count vocabulary correctly assigns
+  `civilian`/`inspector`/`watchman`/`hand` roles and populates `allies`
+  for Hand players, landing in `Phase.SHOW_HANDS` without any client-side
+  error.
+
+**Deliberately not done in Phase 6:**
+- The hand-mark logo/wordmark treatment (Phase 7).
+- Any beat-specific component (Letter, Room, Crossing, Table, Offer UI,
+  Reading, Lobby redesign) -- Phases 8-14. The current tree is still the
+  pre-Blackhand structural shape (`Lobby`/`NightPanel`/voting/day/game-over
+  panels), now correctly tokened and vocabulary-correct, not yet
+  reorganized into the 11-beat sequence.
+- Sound (Phase 11) -- `sound.js` is untouched.
+- Any Show Your Hands or Offer interactive UI, per above.
+- Player-count floor/ceiling validation (still deferred from Phase 1).
+- **Not pushed**, per the confirmed policy. This is the first frontend
+  phase, and while a game can now genuinely be started and played through
+  night/day/voting/game-over with correct vocabulary, Show Your Hands and
+  Offer -- both of which the engine can enter under normal play at typical
+  player counts -- still have no interactive UI at all, so the frontend is
+  not yet "far enough along to actually work end to end." Hold continues.
+
+## Phases 7 through 15: not started

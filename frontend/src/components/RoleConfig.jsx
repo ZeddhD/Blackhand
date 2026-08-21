@@ -1,6 +1,6 @@
 import { roleLabel } from "../roles";
 
-const CONFIGURABLE_ROLES = ["mafia", "detective", "doctor", "godfather"];
+const CONFIGURABLE_ROLES = ["hand", "inspector", "watchman"];
 
 export default function RoleConfig({ roleCounts, setRoleCounts, playerCount }) {
   const assigned = Object.values(roleCounts).reduce((a, b) => a + b, 0);
