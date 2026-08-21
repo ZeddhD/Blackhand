@@ -6,6 +6,7 @@ import Mark from "./components/Mark";
 import RoleConfig from "./components/RoleConfig";
 import Timer from "./components/Timer";
 import PlayerRow from "./components/PlayerRow";
+import Room from "./phases/Room";
 import { ROLE_INFO, roleLabel } from "./roles";
 import {
   isSoundEnabled,
@@ -192,9 +193,12 @@ export default function App() {
       <header className="topbar">
         <span className="room-code">Room {roomCode}</span>
         <div className="topbar-right">
-          {timer && timer.phase === state.phase && timer.secondsLeft != null && (
-            <Timer seconds={timer.secondsLeft} total={timer.totalSeconds} phase={timer.phase} />
-          )}
+          {timer &&
+            timer.phase === state.phase &&
+            timer.secondsLeft != null &&
+            state.phase !== "day_discussion" && (
+              <Timer seconds={timer.secondsLeft} total={timer.totalSeconds} phase={timer.phase} />
+            )}
           <button className="sound-toggle" onClick={toggleSound}>
             {soundOn ? "Sound On" : "Sound Off"}
           </button>
@@ -244,17 +248,13 @@ export default function App() {
       )}
 
       {!isDead && state.phase === "day_discussion" && (
-        <div className="card">
-          <h2>Day Discussion</h2>
-          <p className="muted">Talk it out over voice. Voting starts when the timer ends.</p>
-          <ul className="player-list">
-            {state.players.map((p) => (
-              <li key={p.id}>
-                <PlayerRow name={p.name} dead={!p.alive} offline={state.connected?.[p.id] === false} />
-              </li>
-            ))}
-          </ul>
-        </div>
+        <Room
+          players={state.players}
+          connected={state.connected}
+          ledger={state.ledger}
+          timer={timer}
+          discussionSeconds={timer?.phase === "day_discussion" ? timer.totalSeconds : undefined}
+        />
       )}
 
       {!isDead && state.phase === "voting" && (
