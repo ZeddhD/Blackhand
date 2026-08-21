@@ -270,6 +270,14 @@ if os.path.isdir(FRONTEND_DIST):
 
     @app.get("/{code}")
     async def room_code_fallback(code: str):
+        # This single-segment catch-all is registered before the
+        # StaticFiles mount below, so without this check it swallows any
+        # root-level static file whose name isn't a 4-letter room code
+        # (favicon.svg, robots.txt, etc.) before the mount ever sees it,
+        # 404ing instead of serving the real file.
+        static_path = os.path.join(FRONTEND_DIST, code)
+        if os.path.isfile(static_path):
+            return FileResponse(static_path)
         if re.fullmatch(r"[A-Za-z]{4}", code):
             return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
         raise HTTPException(status_code=404)
