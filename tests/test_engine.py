@@ -98,6 +98,59 @@ def test_watchman_can_save_the_target():
     assert victim.alive
 
 
+def test_watchman_gets_private_feedback_only_when_the_block_actually_worked():
+    game = make_game(role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
+    game.start_game()
+    hand = by_role(game, Role.HAND)[0]
+    watchman = by_role(game, Role.WATCHMAN)[0]
+    victim = next(p for p in game.players if p.role not in (Role.HAND, Role.WATCHMAN))
+    game.submit_night_action(hand.id, ActionType.KILL, victim.id)
+    game.submit_night_action(watchman.id, ActionType.PROTECT, victim.id)
+    game.resolve_night()
+    assert any("worked" in msg for msg in game.private_log.get(watchman.id, []))
+
+
+def test_watchman_gets_no_feedback_when_protection_was_not_needed():
+    game = make_game(role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
+    game.start_game()
+    hand = by_role(game, Role.HAND)[0]
+    watchman = by_role(game, Role.WATCHMAN)[0]
+    others = [p for p in game.players if p.role not in (Role.HAND, Role.WATCHMAN)]
+    game.submit_night_action(hand.id, ActionType.KILL, others[0].id)
+    game.submit_night_action(watchman.id, ActionType.PROTECT, others[1].id)  # a different target
+    game.resolve_night()
+    assert game.private_log.get(watchman.id, []) == []
+
+
+def test_watchman_gets_no_feedback_when_hand_offers_instead_of_killing():
+    # Critical: an offer night must look identical to a no-kill night from
+    # the Watchman's point of view, or their private feedback would leak
+    # that a recruitment attempt happened this round.
+    game = make_game(
+        room_code="TEST", names=["A", "B", "C", "D", "E", "F"], role_counts={Role.HAND: 1, Role.WATCHMAN: 1}
+    )
+    game.start_game()
+    hand = by_role(game, Role.HAND)[0]
+    watchman = by_role(game, Role.WATCHMAN)[0]
+    recruit = next(p for p in game.players if p.role not in (Role.HAND, Role.WATCHMAN))
+    game.submit_night_action(hand.id, ActionType.OFFER, recruit.id)
+    game.submit_night_action(watchman.id, ActionType.PROTECT, recruit.id)
+    game.resolve_night()
+    assert game.phase == Phase.OFFER
+    assert game.private_log.get(watchman.id, []) == []
+
+
+def test_watchman_self_heal_gets_private_feedback_phrased_in_second_person():
+    game = make_game(role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
+    game.start_game()
+    hand = by_role(game, Role.HAND)[0]
+    watchman = by_role(game, Role.WATCHMAN)[0]
+    game.submit_night_action(hand.id, ActionType.KILL, watchman.id)
+    game.submit_night_action(watchman.id, ActionType.PROTECT, watchman.id)
+    game.resolve_night()
+    assert game.private_log[watchman.id] == ["You protected yourself, and survived an attack."]
+
+
 def test_watchman_self_heal_allowed_once_then_blocked():
     game = make_game(role_counts={Role.HAND: 1, Role.WATCHMAN: 1})
     game.start_game()

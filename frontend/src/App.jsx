@@ -429,7 +429,7 @@ export default function App() {
         </Letter>
       )}
 
-      <InvestigationLetters log={state.private_log} />
+      <PrivateResultLetters log={state.private_log} />
 
       {isDead && <DeadPanel state={state} />}
 
@@ -629,7 +629,7 @@ function DeadPanel({ state }) {
   );
 }
 
-function InvestigationLetters({ log }) {
+function PrivateResultLetters({ log }) {
   if (!log?.length) return null;
   return (
     <>
