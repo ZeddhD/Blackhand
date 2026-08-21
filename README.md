@@ -206,16 +206,61 @@ one of those.
 
 ## Testing gap: no manual browser testing yet
 
-The engine (36 pytest tests) and the server protocol (verified live with
-scripted WebSocket clients: leave-lobby, custom timers, action-driven
-night/voting endings, the shared Mafia kill syncing across members, dead
-players seeing the round log, reconnect-within-grace, disconnect
-auto-removal, mid-game disconnect marking eliminated, idle room reaping)
-are all tested end to end. The frontend has only been checked for a
-successful `npm run build` -- it has not been opened in a real browser.
-That matters most for anything purely visual or client-side: the circular
-timer ring, the sound cues (including the new shared death toll), the
-grayscale dead screen, avatar rendering, the offline tags, and the
-confirmation dialogs on Return to Lobby / Leave Game. A clean build proves
-the code compiles, not that it looks or sounds right. Play a real round in
-a browser and report anything that looks or sounds wrong.
+This project became Blackhand partway through (see `BLACKHAND.md` and
+`BLACKHAND_PROGRESS.md` for the full 15-phase build history). What
+follows describes the current, honest state of that build, not the
+original Mafia project this section used to describe.
+
+**What has actually been verified, and how:**
+
+- The engine: 86 pytest tests, covering every rule in `BLACKHAND.md`
+  Part 2 (Recruitment, Show Your Hands, the Ledger, win conditions, the
+  night resolution pipeline) plus the player-count validation from
+  section 7.3. All passing.
+- The server protocol: verified live, repeatedly, with disposable
+  scripted WebSocket clients, one per phase, each run against a real
+  `uvicorn` instance and then deleted (never kept as a permanent suite,
+  per this project's own stated practice). Confirmed this way: the Offer
+  is delivered only to its recipient and nobody else's interface
+  changes; the Black Hand channel is disabled during Show Your Hands and
+  restored after; a Marked player's `allies`/`role_reveal` update
+  correctly across a full accept-or-refuse round trip; `role_reveal` and
+  `offer_outcome` reach the client with the right shape at game over;
+  the 6-12 player floor and ceiling actually reject a real client's
+  `start_game`; `show_hands_threshold` sent from the lobby actually
+  changes when Show Your Hands fires.
+- Every audio function: a disposable Node smoke test (bundled with
+  esbuild, run against a mock Web Audio API) confirmed all 32 exported
+  functions run without throwing, including the deferred 2-second
+  death-silence callback actually firing, not just being scheduled.
+
+**What has never been checked, because nothing in this environment
+could check it:** the entire visual and audio result of all 15 phases
+has never been opened in a real browser, let alone a real phone. Every
+CSS rule, every animation timing, every color, the hand mark's actual
+asymmetry and legibility at real screen sizes, whether anything in
+`frontend/src/audio/` actually sounds like paper, wood, or room tone
+rather than just filtered noise, whether the vote stamp is genuinely
+countable by ear with the screen off, whether the Crossing's ring
+assembly and the Reading's staggered unfolds look and feel right, none
+of it has been seen or heard by anyone. A clean `npm run build` proves
+the code compiles. It proves nothing about whether it looks or sounds
+like Blackhand.
+
+**Play a full game in a real browser, ideally on a real phone, and
+report back anything that looks, sounds, or feels wrong.** Particular
+places worth a close look, in rough order of how much is riding on
+them: The Crossing and The Table (the document calls this "the most
+important frontend phase in the build"); the Offer's full-black screen
+and its timing; The Reading's staggered unfolds and the refusal card's
+timing; every sound cue, especially whether the ambient bed's per-death
+erosion is audible by the final round and whether votes are actually
+countable with the screen off; the hand mark at both 200px (the Waiting
+Room) and 24px (the favicon).
+
+**Also worth knowing:** the rest of this README, below this section, is
+largely unchanged since before the Blackhand rewrite began and still
+describes the original Mafia project (old role names, old mechanics).
+Updating it was never in scope for any of the 15 Blackhand phases except
+this testing-gap section specifically; treat the rest of this file as
+historical until someone does a full pass.

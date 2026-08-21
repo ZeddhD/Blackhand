@@ -5,7 +5,13 @@ status against `BLACKHAND.md`'s 15-phase build plan so a fresh session
 with no memory of prior conversations can pick up correctly instead of
 re-deriving state or silently disagreeing with an earlier decision.
 
-**Current status: Phase 14 complete (Phase 11's human listening pass still pending). Phase 15 not started.**
+**Current status: Phase 15 partially done. Logging and the README are
+complete and verified; the phase's own primary acceptance criterion (a
+full game played in a real browser on a real phone) cannot be done by
+Claude in this environment at all and is blocked on the user. See below.
+This also means Phase 11's human listening pass and this phase's
+browser playtest are really the same outstanding ask, not two separate
+ones.**
 
 **Push policy, confirmed by the user: commit locally after every phase,
 but do not `git push` at all until the frontend is far enough along that
@@ -1653,4 +1659,78 @@ paper rectangle showing only a name, nothing that unfolds or reveals.
   interactive UI anywhere in the app, even though its lobby
   configuration is now fully real.
 
-## Phase 15: not started
+## Phase 15: Browser testing and instrumentation (partially done)
+
+**Files touched:** `server/rooms.py` (`_log_game_result`, called once
+per game from `run_room`), `README.md` (the testing gap section
+rewritten; nothing else in the file touched).
+
+**One of this phase's three acceptance criteria cannot be met by Claude
+in this environment, at all, under any interpretation, and this is said
+outright rather than worked around.** "Play a complete game in a real
+browser on a real phone" needs an actual browser and an actual phone.
+This environment has neither, the same underlying gap noted honestly in
+Phases 8, 10, 11, 12, and 13 for narrower slices of the same problem
+(no screenshot tool, no audio playback). Phase 15 is where that
+accumulated gap becomes the phase's own headline requirement instead of
+a caveat on someone else's. **This needs the user.** Play a full game
+in a real browser, ideally on a real phone, and report back what looks,
+sounds, or feels wrong. The README's rewritten testing gap section lists
+where to look first.
+
+**Anonymous per-game logging is built and verified live**, per section
+3.3's stated data needs and the Phase 0 audit's confirmed decision
+(stdout only, no new persistent storage). `_log_game_result()` runs
+exactly once per game, from `run_room` right after its loop exits with
+`Phase.GAME_OVER`, regardless of which of the loop's several internal
+`break` points got there. One line, one JSON payload, no player names or
+ids: player count, full config (role counts, Show Your Hands
+enabled/threshold, both timer lengths), round count, winner, whether an
+offer was made and its outcome, and whether Show Your Hands fired
+(including the occurrence count, not just a boolean, since section 3.4
+names "Show Your Hands stall" as a specific pattern worth watching for
+and a bare yes/no would have thrown that away). Verified live against a
+running server: a real 7-player game played to completion produced
+exactly
+`blackhand_game_result {"player_count": 7, "config": {...}, "round_count": 1,
+"winner": "hand", "offer_made": false, "offer_accepted": null,
+"show_hands_fired": false, "show_hands_occurrences": 0}`
+on stdout, which is what would actually appear in Render's log
+dashboard in production, not a simulated approximation of it.
+
+**The README's testing gap section is rewritten honestly, not just
+appended to.** The old section was entirely pre-Blackhand (it referenced
+"36 pytest tests" and "the shared Mafia kill syncing," neither of which
+exist anymore) and had never been touched across all 14 prior phases.
+The new section states plainly what's actually been verified in this
+project (86 engine tests, extensive live-scripted server protocol
+checks, an audio smoke test against a mock Web Audio API) and, in equal
+weight, what has never been checked by anyone at all: the entire visual
+and audio result of all 15 phases has never been opened in a real
+browser. It also flags, explicitly, that the rest of `README.md` below
+that section is still the old pre-Blackhand documentation and was never
+in scope for any of the 15 phases to update, so a future reader (or
+session) doesn't mistake silence there for it being current.
+
+**Acceptance criteria:**
+- At least one full game played end to end in a browser, with findings
+  reported: **not done, cannot be done here, needs the user.**
+- Logging in place and producing data: done, verified live against a
+  running server producing real output, not just reviewed as code.
+- README honest and current: the testing gap section is both. The rest
+  of the file is honest about being neither, which is the most this
+  phase's stated scope (just that one section) allows fixing.
+
+**Deliberately not done in Phase 15:**
+- The browser/phone playtest itself, per above.
+- A full README rewrite. Only the testing gap section was in scope for
+  any phase; the rest (stack description, old role names, old mechanics)
+  stays stale until a session is explicitly asked to update it.
+- Any change to the 45-55% Black Hand win rate target itself (section
+  3.3) or the balance levers listed there. The logging now exists to
+  eventually measure this, but no games have been played yet to measure,
+  and this phase's job was building the instrument, not reading it.
+- **Not pushed**, per the confirmed policy, now doubly true: the
+  frontend still has no Show Your Hands UI, and nothing in this entire
+  project has been confirmed to actually work by a human looking at or
+  listening to a browser yet.

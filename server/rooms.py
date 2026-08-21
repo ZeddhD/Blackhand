@@ -3,6 +3,7 @@ reconnection. No game rules live here -- see engine/game.py."""
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 import string
 import time
@@ -185,6 +186,33 @@ async def _wait_for_night(room: Room) -> None:
         room.night_ready_event.clear()
 
 
+def _log_game_result(room: Room) -> None:
+    """Anonymous per-game balance logging (Phase 15, section 3.3). No
+    player names or ids, no persistent storage per the Phase 0 audit's
+    confirmed decision: stdout only, read from Render's own log
+    dashboard when anyone wants to check the Black Hand win rate against
+    the 45-55% target."""
+    game = room.game
+    offer = game.offer_outcome
+    payload = {
+        "player_count": len(game.players),
+        "config": {
+            "role_counts": {role.value: count for role, count in game.config.role_counts.items()},
+            "show_hands_enabled": game.config.show_hands_enabled,
+            "show_hands_threshold": game.config.show_hands_threshold,
+            "discussion_seconds": room.discussion_seconds,
+            "voting_seconds": room.voting_seconds,
+        },
+        "round_count": game.night_number,
+        "winner": game.winner.value if game.winner else None,
+        "offer_made": offer is not None,
+        "offer_accepted": offer["accepted"] if offer else None,
+        "show_hands_fired": game.show_hands_count > 0,
+        "show_hands_occurrences": game.show_hands_count,
+    }
+    print(f"blackhand_game_result {json.dumps(payload)}", flush=True)
+
+
 async def run_room(room: Room) -> None:
     """Drives the state machine: NIGHT -> RESOLVE -> DAY -> VOTING -> RESOLVE -> ...
 
@@ -230,6 +258,9 @@ async def run_room(room: Room) -> None:
         import traceback
 
         traceback.print_exc()
+
+    if game.phase == Phase.GAME_OVER:
+        _log_game_result(room)
 
 
 async def _disconnect_after_grace(room: Room, player_id: str) -> None:
