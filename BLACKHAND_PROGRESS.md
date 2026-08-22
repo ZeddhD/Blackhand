@@ -2149,3 +2149,47 @@ rendering with no new state or server interaction, so nothing new to
 verify live beyond the build itself -- the same standing "not
 independently browser-verifiable here" gap as every other frontend-only
 change this session.
+
+### The Black Hand's accent color retinted, plus a glove watermark on the role letter
+
+**The gap:** the user disliked `--lamp`'s gold (`#c9a227`), the one
+color rationed to the Timer running low, the Offer buttons, and every
+Black Hand private surface. Discussed rather than just recolored on
+request: `--lamp` is gold for a real reason, not an arbitrary choice --
+`--ink` is nearly indistinguishable from `--room` in luminance, and
+`--paper` is reserved for the Table's identity by an existing rule
+("never `--paper`"), so `--lamp` is the only token in the whole closed
+palette with real contrast against the Hand's `--room` ground. Any fix
+had to either retint that one token or add a second visual channel
+alongside it, not remove it outright. The user separately proposed a
+black-glove treatment of the hand mark itself for Hand surfaces.
+Confirmed with the user: keep the same rationed-accent system, retint
+to a cold gunmetal silver, and add the glove mark as a watermark on the
+role letter specifically (not a badge elsewhere, not Delivery-only).
+
+**Built (`frontend/src/index.css`, `frontend/src/components/Mark.jsx`,
+`frontend/src/components/Letter.jsx`).** `--lamp` changed from
+`#c9a227` to `#9fb0bf`; every one of its existing rationed uses (Timer
+under 10 seconds, Offer buttons, Mafia Chat, the role letter) picks up
+the new color automatically through the token, no per-component
+changes needed there. `HandGlyph` (`Mark.jsx`) gained an `outline` prop:
+when set, the hand shape fills `--room` (nearly disappearing into
+whatever it sits on) and is defined only by a `--paper` stroke, rather
+than a fully visible `currentColor` fill -- reusing `--paper` for the
+outline rather than introducing a new value, since a literal pure white
+would have been the first color in the whole system to fall outside the
+closed four-token palette. `Letter.jsx` renders this outlined glyph as
+a large (220px), low-opacity, absolutely-positioned watermark behind
+the letter's own content whenever `faction === "hand"` -- which covers
+both the persistent role letter and Delivery, since both already share
+the same `Letter` component.
+
+**Verified:** both linters clean, `npm run build` clean, engine suite
+unaffected (99/99, no engine changes). A mockup artifact was built and
+published showing the actual shipped CSS values (the real hand path,
+the real letter clip-path, before/after side by side across the role
+letter, the Offer buttons, and Mafia Chat) since this environment still
+has no way to open the real app in a browser -- the same standing gap
+noted since Phase 15, worked around here the same way it has been
+throughout: an honest static reproduction of the real styles, not a
+claim of having seen it render live.

@@ -23,7 +23,7 @@
   --room: #0f1216;
   --paper: #e4dfd3;
   --ink: #14171b;
-  --lamp: #c9a227;
+  --lamp: #9fb0bf;
 
   /* Documented mixes of the four base colors. Nothing else. */
   --paper-edge: color-mix(in srgb, var(--paper) 88%, var(--ink));
@@ -270,9 +270,24 @@ body {
 .letter-hand {
   background: var(--room);
   color: var(--lamp);
+  position: relative;
+  overflow: hidden;
+}
+
+/* The glove watermark (section 4.6-adjacent, the user's own idea): a
+   hand shape barely visible against the room it sits on, defined only by
+   its --paper rim, sitting behind the letter's own content rather than
+   announcing itself as an icon. */
+.letter-hand-watermark {
+  position: absolute;
+  right: -40px;
+  bottom: -40px;
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .letter-page {
+  position: relative;
   padding: var(--space-3-t) var(--space-2-t) var(--space-3-t) calc(var(--space-2-t) + 8px);
 }
 
