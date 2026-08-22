@@ -64,7 +64,7 @@ class Room:
     host_id: Optional[str] = None
     connections: Dict[str, WebSocket] = field(default_factory=dict)
     connected: Dict[str, bool] = field(default_factory=dict)
-    mafia_chat: List[ChatMessage] = field(default_factory=list)
+    hand_chat: List[ChatMessage] = field(default_factory=list)
     early_end_event: asyncio.Event = field(default_factory=asyncio.Event)
     night_ready_event: asyncio.Event = field(default_factory=asyncio.Event)
     runner_task: Optional[asyncio.Task] = None
@@ -79,7 +79,7 @@ class Room:
             return
         self.host_id = self.game.players[0].id if self.game.players else None
 
-    def mafia_channel_ids(self) -> set:
+    def hand_channel_ids(self) -> set:
         # "The channel is disabled during Show Your Hands" (section 2.4) --
         # nobody can read or send during this window, enforced by simply
         # returning no recipients at all rather than a separate check.
@@ -138,15 +138,15 @@ async def broadcast_timer(room: Room, seconds_left: int, total_seconds: int) -> 
             pass
 
 
-async def broadcast_mafia_chat(room: Room) -> None:
+async def broadcast_hand_chat(room: Room) -> None:
     payload = {
-        "type": "mafia_chat",
+        "type": "hand_chat",
         "messages": [
             {"player_id": m.player_id, "name": m.name, "text": m.text, "ts": m.ts}
-            for m in room.mafia_chat
+            for m in room.hand_chat
         ],
     }
-    for pid in room.mafia_channel_ids():
+    for pid in room.hand_channel_ids():
         ws = room.connections.get(pid)
         if ws is None:
             continue

@@ -2193,3 +2193,55 @@ has no way to open the real app in a browser -- the same standing gap
 noted since Phase 15, worked around here the same way it has been
 throughout: an honest static reproduction of the real styles, not a
 claim of having seen it render live.
+
+### Stronger --lamp-quiet contrast, and every "Mafia" name gone from the codebase
+
+**Two separate requests from a screenshot of the mockup above.** The
+user pointed at secondary text ("Fellow Hand: X", panel headings) that
+read too faint, and separately asked for "Mafia" to stop existing
+anywhere in the game, not just on screen.
+
+**Contrast (`frontend/src/index.css`).** `--lamp-quiet`'s mix ratio
+went from 45% lamp / 55% room to 68% / 32%. This token is what `.muted`
+text and every Hand-surface `h2` heading use; role-badge and role-secret
+text were never actually dimmed in the real app (they inherit the
+letter's full, non-quiet `--lamp`), which meant the mockup's first draft
+had actually mis-replicated the real CSS -- it dimmed `.role-secret`
+too, which the shipped code never did. Fixed the token for real
+legibility, and separately corrected the mockup to stop lying about
+which lines are actually dim in production.
+
+**The rename (`server/rooms.py`, `server/main.py`,
+`frontend/src/components/MafiaChat.jsx` deleted, replaced by the new
+`HandChat.jsx`, `frontend/src/App.jsx`, `frontend/src/useGameSocket.js`,
+`frontend/src/index.css`).** Every internal "mafia" name is gone, not
+just the on-screen label (which already said "The Black Hand" before
+this and needed no change): the WebSocket message type `mafia_chat` ->
+`hand_chat`, `Room.mafia_chat` -> `Room.hand_chat`,
+`mafia_channel_ids()` -> `hand_channel_ids()`, `broadcast_mafia_chat`
+-> `broadcast_hand_chat`, the `mafiaChat`/`sendMafiaChat` React state
+and callback -> `handChat`/`sendHandChat`, the `.mafia-chat` CSS class
+-> `.hand-chat`, the reconnect `localStorage` keys `mafia_room_code`/
+`mafia_player_id` -> `blackhand_room_code`/`blackhand_player_id`, and
+the rejection message "You are not in the mafia channel" -> "You are
+not in the Black Hand channel". `grep -rni mafia` across `server/` and
+`frontend/src` now returns nothing outside stale `.pyc` cache files.
+Historical mentions of "Mafia" inside this progress log's own past
+entries were left untouched, since they correctly describe what
+predated the Blackhand redesign at the time they were written, not the
+current codebase.
+
+**One real, load-bearing consequence:** renaming the `localStorage`
+keys means anyone with a saved reconnect session from before this
+change loses it once, the same one-time cost as any key rename -- there
+is no live production install to worry about breaking here, so this was
+accepted rather than adding a migration for a pre-launch project.
+
+**Verified:** both linters clean, `npm run build` clean, engine suite
+unaffected (99/99, no server/engine logic changed, only names).
+Verified live against a running server over the real WebSocket
+protocol: a Hand player's `hand_chat` message broadcasts correctly to
+the whole Hand team, and a non-Hand player's attempt is rejected with
+the exact new message `"You are not in the Black Hand channel"`. The
+mockup artifact was corrected and republished to the same URL with the
+new contrast values and the renamed panel.

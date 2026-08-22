@@ -17,7 +17,7 @@ from .rooms import (
     ROLE_BY_NAME,
     Room,
     RoomManager,
-    broadcast_mafia_chat,
+    broadcast_hand_chat,
     broadcast_state,
     cancel_disconnect_removal,
     reap_idle_rooms,
@@ -101,7 +101,7 @@ async def ws_endpoint(websocket: WebSocket):
                         {"type": "joined", "room_code": room.code, "player_id": player_id}
                     )
                     await broadcast_state(room)
-                    await broadcast_mafia_chat(room)
+                    await broadcast_hand_chat(room)
                     continue
                 if target.game.phase != Phase.LOBBY:
                     await _send_error(websocket, "Game already in progress")
@@ -200,7 +200,7 @@ async def ws_endpoint(websocket: WebSocket):
                 except IllegalActionError as e:
                     await _send_error(websocket, str(e))
                     continue
-                room.mafia_chat.clear()
+                room.hand_chat.clear()
                 await broadcast_state(room)
 
             elif mtype == "vote":
@@ -238,14 +238,14 @@ async def ws_endpoint(websocket: WebSocket):
                 if room.game.show_hands_votes_complete():
                     room.early_end_event.set()
 
-            elif mtype == "mafia_chat":
+            elif mtype == "hand_chat":
                 if room is None or player_id is None:
                     continue
                 if room.game.phase == Phase.SHOW_HANDS:
                     await _send_error(websocket, "The channel is disabled during Show Your Hands")
                     continue
-                if player_id not in room.mafia_channel_ids():
-                    await _send_error(websocket, "You are not in the mafia channel")
+                if player_id not in room.hand_channel_ids():
+                    await _send_error(websocket, "You are not in the Black Hand channel")
                     continue
                 text = (msg.get("text") or "").strip()[:500]
                 if not text:
@@ -253,8 +253,8 @@ async def ws_endpoint(websocket: WebSocket):
                 sender = room.game.player(player_id)
                 from .rooms import ChatMessage
 
-                room.mafia_chat.append(ChatMessage(player_id=player_id, name=sender.name, text=text))
-                await broadcast_mafia_chat(room)
+                room.hand_chat.append(ChatMessage(player_id=player_id, name=sender.name, text=text))
+                await broadcast_hand_chat(room)
 
             else:
                 await _send_error(websocket, f"Unknown message type: {mtype}")
