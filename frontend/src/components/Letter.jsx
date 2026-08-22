@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { letterUnfold } from "../audio";
+import { HandGlyph } from "./Mark";
 
 // Every piece of private information arrives as a letter (section 4.5):
 // role, investigation result, the offer. Never a toast, a banner, a
@@ -33,6 +34,7 @@ export default function Letter({ faction = "table", className, style, soundDelay
 
   return (
     <div className={classes} style={style}>
+      {faction === "hand" && <HandGlyph outline size={220} className="letter-hand-watermark" />}
       <div className="letter-page">{children}</div>
     </div>
   );
