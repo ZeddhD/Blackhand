@@ -276,13 +276,14 @@ body {
 
 /* The glove watermark (section 4.6-adjacent, the user's own idea): a
    hand shape barely visible against the room it sits on, defined only by
-   its --paper rim, sitting behind the letter's own content rather than
-   announcing itself as an icon. */
+   its --paper rim. Pushed well past the corner and scaled up so only a
+   soft partial curve shows past the text column -- background weather,
+   not a sticker placed on top of the letter's own content. */
 .letter-hand-watermark {
   position: absolute;
-  right: -40px;
-  bottom: -40px;
-  opacity: 0.4;
+  right: -70px;
+  bottom: -60px;
+  opacity: 0.25;
   pointer-events: none;
 }
 
@@ -596,14 +597,22 @@ button.selected {
   margin: 0 0 var(--space-1-t);
 }
 
+/* A quiet caption, not a warning callout: this used to be a bordered
+   box, which read like a generic form-validation banner and had nothing
+   to do with the letter's own editorial voice. Same treatment as .muted
+   now, just uppercase and tracked wider, since it's still an aside, not
+   a boxed alert. */
 .role-secret {
   font-family: var(--face-rec);
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  border: 1px solid var(--ink-faint);
-  padding: var(--space-1-t);
+  color: var(--ink-quiet);
   margin: 0 0 var(--space-2-t);
+}
+
+.letter-hand .role-secret {
+  color: var(--lamp-quiet);
 }
 
 .role-config {

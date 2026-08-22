@@ -34,7 +34,7 @@ export default function Letter({ faction = "table", className, style, soundDelay
 
   return (
     <div className={classes} style={style}>
-      {faction === "hand" && <HandGlyph outline size={220} className="letter-hand-watermark" />}
+      {faction === "hand" && <HandGlyph outline size={260} className="letter-hand-watermark" />}
       <div className="letter-page">{children}</div>
     </div>
   );
