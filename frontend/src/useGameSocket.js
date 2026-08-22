@@ -9,7 +9,7 @@ function wsUrl() {
 export function useGameSocket() {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState(null);
-  const [mafiaChat, setMafiaChat] = useState([]);
+  const [handChat, setHandChat] = useState([]);
   const [timer, setTimer] = useState(null);
   const [error, setError] = useState(null);
   const [roomCode, setRoomCode] = useState(null);
@@ -29,8 +29,8 @@ export function useGameSocket() {
 
     ws.onopen = () => {
       setConnected(true);
-      const savedRoom = localStorage.getItem("mafia_room_code");
-      const savedPlayer = localStorage.getItem("mafia_player_id");
+      const savedRoom = localStorage.getItem("blackhand_room_code");
+      const savedPlayer = localStorage.getItem("blackhand_player_id");
       if (savedRoom && savedPlayer) {
         ws.send(JSON.stringify({ type: "join", room_code: savedRoom, player_id: savedPlayer }));
       }
@@ -45,27 +45,27 @@ export function useGameSocket() {
         case "joined":
           setRoomCode(msg.room_code);
           setPlayerId(msg.player_id);
-          localStorage.setItem("mafia_room_code", msg.room_code);
-          localStorage.setItem("mafia_player_id", msg.player_id);
+          localStorage.setItem("blackhand_room_code", msg.room_code);
+          localStorage.setItem("blackhand_player_id", msg.player_id);
           window.history.replaceState(null, "", `/${msg.room_code}`);
           setError(null);
           break;
         case "state":
           setState(msg.state);
-          if (msg.state.phase === "lobby") setMafiaChat([]);
+          if (msg.state.phase === "lobby") setHandChat([]);
           break;
         case "left":
-          localStorage.removeItem("mafia_room_code");
-          localStorage.removeItem("mafia_player_id");
+          localStorage.removeItem("blackhand_room_code");
+          localStorage.removeItem("blackhand_player_id");
           window.history.replaceState(null, "", "/");
           setState(null);
           setRoomCode(null);
           setPlayerId(null);
           setTimer(null);
-          setMafiaChat([]);
+          setHandChat([]);
           break;
-        case "mafia_chat":
-          setMafiaChat(msg.messages);
+        case "hand_chat":
+          setHandChat(msg.messages);
           break;
         case "timer":
           setTimer({ phase: msg.phase, secondsLeft: msg.seconds_left, totalSeconds: msg.total_seconds });
@@ -102,14 +102,14 @@ export function useGameSocket() {
     [send]
   );
   const vote = useCallback((targetId) => send({ type: "vote", target_id: targetId }), [send]);
-  const sendMafiaChat = useCallback((text) => send({ type: "mafia_chat", text }), [send]);
+  const sendHandChat = useCallback((text) => send({ type: "hand_chat", text }), [send]);
   const respondToOffer = useCallback((accepted) => send({ type: "offer_response", accepted }), [send]);
   const submitShowHandsVote = useCallback((choice) => send({ type: "show_hands_vote", choice }), [send]);
 
   return {
     connected,
     state,
-    mafiaChat,
+    handChat,
     timer,
     error,
     roomCode,
@@ -121,7 +121,7 @@ export function useGameSocket() {
     returnToLobby,
     nightAction,
     vote,
-    sendMafiaChat,
+    sendHandChat,
     respondToOffer,
     submitShowHandsVote,
   };

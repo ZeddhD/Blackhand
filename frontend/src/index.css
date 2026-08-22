@@ -30,7 +30,7 @@
   --ink-quiet: color-mix(in srgb, var(--ink) 55%, var(--paper));
   --ink-faint: color-mix(in srgb, var(--ink) 25%, var(--paper));
   --room-lift: color-mix(in srgb, var(--room) 92%, var(--paper));
-  --lamp-quiet: color-mix(in srgb, var(--lamp) 45%, var(--room));
+  --lamp-quiet: color-mix(in srgb, var(--lamp) 68%, var(--room));
 
   /* Two families. Serif for testimony, mono for the record. */
   --face-hand: "Newsreader", Georgia, serif;
@@ -1259,21 +1259,21 @@ button.selected {
 
 /* -- The Black Hand: never paper, room ground with lamp text, always. ----- */
 
-.mafia-chat {
+.hand-chat {
   background: var(--room);
   color: var(--lamp);
   border: 1px solid var(--lamp-quiet);
   box-shadow: none;
 }
 
-.mafia-chat .muted,
-.mafia-chat h2,
+.hand-chat .muted,
+.hand-chat h2,
 .letter-hand .muted,
 .letter-hand h2 {
   color: var(--lamp-quiet);
 }
 
-.mafia-chat h2,
+.hand-chat h2,
 .letter-hand h2 {
   border-bottom-color: var(--lamp-quiet);
 }

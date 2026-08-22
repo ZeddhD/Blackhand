@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGameSocket } from "./useGameSocket";
 import Letter from "./components/Letter";
-import MafiaChat from "./components/MafiaChat";
+import HandChat from "./components/HandChat";
 import Mark, { HandGlyph } from "./components/Mark";
 import HowToPlay from "./components/HowToPlay";
 import Timer from "./components/Timer";
@@ -50,7 +50,7 @@ export default function App() {
   const {
     connected,
     state,
-    mafiaChat,
+    handChat,
     timer,
     error,
     roomCode,
@@ -62,7 +62,7 @@ export default function App() {
     returnToLobby,
     nightAction,
     vote,
-    sendMafiaChat,
+    sendHandChat,
     respondToOffer,
     submitShowHandsVote,
   } = useGameSocket();
@@ -469,7 +469,7 @@ export default function App() {
       )}
 
       {!isDead && isHandFaction && displayPhase === "night" && (
-        <MafiaChat messages={mafiaChat} onSend={sendMafiaChat} />
+        <HandChat messages={handChat} onSend={sendHandChat} />
       )}
 
       {!isDead && state.phase === "day_discussion" && (
