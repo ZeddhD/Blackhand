@@ -2245,3 +2245,37 @@ the whole Hand team, and a non-Hand player's attempt is rejected with
 the exact new message `"You are not in the Black Hand channel"`. The
 mockup artifact was corrected and republished to the same URL with the
 new contrast values and the renamed panel.
+
+### The role letter's boxed warning line and colliding watermark, fixed
+
+**The gap, called out from a screenshot:** `.role-secret` ("Do not
+reveal your role until the game ends.") has always had a bordered box
+around it in production, not just in the mockup, a plain rectangle that
+read as a generic warning callout with no relationship to the letter's
+own editorial voice anywhere else in the app. Once the watermark from
+the previous entry shipped, that box's full-width edge sat directly
+under the hand shape's fingers, so the two collided visually rather
+than one framing the other -- the exact "unpolished, lacks identity"
+read the user gave it.
+
+**Built (`frontend/src/index.css`, `frontend/src/components/Letter.jsx`).**
+`.role-secret` dropped the border and padding entirely, replaced with
+the same quiet-caption treatment `.allies` already used (`--ink-quiet`
+on Table letters, `--lamp-quiet` on Hand letters via a new
+`.letter-hand .role-secret` rule) -- consistent with `.muted`, not a
+boxed alert. This is a shared component, so the Table's own role letter
+(Civilian/Inspector/Watchman) gets the same declutter, not a
+Hand-only fix. The watermark itself moved further into the corner
+(`right: -70px; bottom: -60px`, was `-40px`/`-40px`), opacity down to
+0.25 from 0.4, so it reads as
+background weather behind the text column rather than a shape placed on
+top of it. Sizing was deliberately tuned conservatively (260px, not the
+first attempt's much larger push) so the visible portion stays legible
+on a normally-sized letter rather than risking the glyph barely
+showing at all once clipped by `overflow: hidden`.
+
+**Verified:** both linters clean, `npm run build` clean, engine suite
+unaffected (99/99, no engine changes -- purely CSS/component styling).
+Mockup corrected to match and republished to the same URL, since this
+environment still cannot open the real app in a browser to confirm the
+result visually beyond a static reproduction of the real values.
